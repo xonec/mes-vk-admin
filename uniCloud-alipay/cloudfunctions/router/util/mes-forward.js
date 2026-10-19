@@ -21,6 +21,8 @@ const READ_ACTIONS = [
   'listSchedules',
   'listAttendance',
   'attendanceSummary',
+  'myAttendance',
+  'myScheduleDay',
   'attendanceHistory',
   'listJobs',
   'getJob',
@@ -39,7 +41,11 @@ const READ_ACTIONS = [
  * @return {Object} 业务云函数原始返回 { code, message|msg, data }
  */
 async function forward(event = {}, options = {}) {
-  const data = event.data && typeof event.data === 'object' && !Array.isArray(event.data) ? event.data : {};
+  // vk router 不同版本可能把参数放在 event.data（显式 data）或平铺在 event 上，两种都兼容
+  const source = event.data && typeof event.data === 'object' && !Array.isArray(event.data) ? event.data : event;
+  const data = { ...source };
+  // 去掉路由与运行时保留字段，避免透传给业务云函数
+  ;['$url', 'uniIdToken', 'uni_id_token', 'vk', 'context'].forEach(key => { delete data[key] });
   const name = FUNCTIONS[options.target || 'operations'];
   const action = options.action || data.action;
   if (!name) return { code: 500, msg: 'MES 适配层未配置目标云函数' };
