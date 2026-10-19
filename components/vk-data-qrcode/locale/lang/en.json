@@ -1,0 +1,5 @@
+{
+  "vk.qrcode.loadingText": "loading...",
+  "vk.qrcode.contentEmpty": "QR code content cannot be empty",
+  "vk.qrcode.saveSuccess": "QR code saved successfully"
+}

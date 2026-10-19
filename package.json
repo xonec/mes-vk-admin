@@ -1,0 +1,116 @@
+{
+    "id": "vk-unicloud-admin",
+    "name": "vk-unicloud-admin",
+    "version": "1.25.2",
+    "displayName": "【开箱即用】vk-unicloud-admin-快速开发框架-打造unicloud最好用的admin",
+    "description": "vk-unicloud-admin是基于uniapp+unicloud+uni-id+vk-router+element的一套快速PC admin企业级开发框架。小白几分钟即完成一个页面CRUD。",
+    "keywords": [
+        "vk-unicloud-admin",
+        "支持表单可视化拖拽生成代码",
+        "vk云开发",
+        "vk-admin、element-ui",
+        "内置众多API、工具包"
+    ],
+    "main": "main.js",
+    "scripts": {
+        "test": "node tests/order-drawer.test.cjs && node tests/schedule-calendar.test.cjs && node tests/schedule-import-rules.test.cjs",
+        "test:order-drawer": "node tests/order-drawer.test.cjs",
+        "test:calendar": "node tests/schedule-calendar.test.cjs",
+        "test:import-rules": "node tests/schedule-import-rules.test.cjs"
+    },
+    "repository": "https://gitee.com/vk-uni/vk-unicloud-admin",
+    "author": "VK",
+    "license": "MIT",
+    "homepage": "https://vkdoc.fsq.pub/admin/",
+    "dependencies": {
+        "element-ui": "2.15.14",
+        "umy-ui": "1.1.6",
+        "vk-unicloud-admin-ui": "^1.25.5"
+    },
+    "engines": {
+        "HBuilderX": "^3.1.10",
+        "uni-app": "^4.36",
+        "uni-app-x": ""
+    },
+    "dcloudext": {
+        "sale": {
+            "regular": {
+                "price": "0.00"
+            },
+            "sourcecode": {
+                "price": "0.00"
+            }
+        },
+        "contact": {
+            "qq": "370725567"
+        },
+        "declaration": {
+            "ads": "无",
+            "data": "插件不采集任何数据",
+            "permissions": "无"
+        },
+        "npmurl": "",
+        "type": "unicloud-template-project",
+        "darkmode": "x",
+        "i18n": "√",
+        "widescreen": "√"
+    },
+    "uni_modules": {
+        "platforms": {
+            "cloud": {
+                "tcb": "√",
+                "aliyun": "√",
+                "alipay": "√"
+            },
+            "client": {
+                "uni-app": {
+                    "vue": {
+                        "vue2": "√",
+                        "vue3": "x"
+                    },
+                    "web": {
+                        "safari": "√",
+                        "chrome": "√"
+                    },
+                    "app": {
+                        "vue": "√",
+                        "nvue": "x",
+                        "android": "x",
+                        "ios": "x",
+                        "harmony": "x"
+                    },
+                    "mp": {
+                        "weixin": "x",
+                        "alipay": "x",
+                        "toutiao": "x",
+                        "baidu": "x",
+                        "kuaishou": "x",
+                        "jd": "x",
+                        "harmony": "x",
+                        "qq": "x",
+                        "lark": "x",
+                        "xhs": "-"
+                    },
+                    "quickapp": {
+                        "huawei": "x",
+                        "union": "x"
+                    }
+                },
+                "uni-app-x": {
+                    "web": {
+                        "safari": "-",
+                        "chrome": "-"
+                    },
+                    "app": {
+                        "android": "-",
+                        "ios": "-",
+                        "harmony": "-"
+                    },
+                    "mp": {
+                        "weixin": "-"
+                    }
+                }
+            }
+        }
+    }
+}

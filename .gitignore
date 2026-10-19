@@ -1,0 +1,9 @@
+# 依赖与构建产物
+node_modules/
+unpackage/
+dist/
+
+# HBuilderX 本地状态
+.hbuilderx/
+.DS_Store
+*.log

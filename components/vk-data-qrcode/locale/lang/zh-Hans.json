@@ -1,0 +1,5 @@
+{
+  "vk.qrcode.loadingText": "二维码生成中",
+  "vk.qrcode.contentEmpty": "二维码内容不能为空",
+  "vk.qrcode.saveSuccess": "二维码保存成功"
+}

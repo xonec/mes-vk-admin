@@ -1,0 +1,18 @@
+[
+  {
+    "IndexName": "_add_time",
+    "MgoKeySchema": { "MgoIndexKeys": [{ "Name": "_add_time", "Direction": "-1", "Type": "long" }], "MgoIsUnique": false }
+  },
+  {
+    "IndexName": "activity_id",
+    "MgoKeySchema": { "MgoIndexKeys": [{ "Name": "activity_id", "Direction": "1" }], "MgoIsUnique": true }
+  },
+  {
+    "IndexName": "sort",
+    "MgoKeySchema": { "MgoIndexKeys": [{ "Name": "sort", "Direction": "1", "Type": "int" }], "MgoIsUnique": false }
+  },
+  {
+    "IndexName": "enable",
+    "MgoKeySchema": { "MgoIndexKeys": [{ "Name": "enable", "Direction": "1", "Type": "bool" }], "MgoIsUnique": false }
+  }
+]

@@ -1,0 +1,107 @@
+[
+  {
+    "_id": "vk-stat",
+    "menu_id": "vk-stat",
+    "sort": 111,
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-data-line",
+    "name": "vk 统计"
+  },
+  {
+    "_id": "vk-stat-user",
+    "menu_id": "vk-stat-user",
+    "parent_id": "vk-stat",
+    "sort": 1,
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-user",
+    "name": "用户统计"
+  },
+  {
+    "_id": "vk-stat-user-overview",
+    "menu_id": "vk-stat-user-overview",
+    "parent_id": "vk-stat-user",
+    "sort": 1,
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-data-line",
+    "name": "概览",
+    "url": "/pages/vk-stats/user/overview"
+  },
+  {
+    "_id": "vk-stat-user-log",
+    "menu_id": "vk-stat-user-log",
+    "parent_id": "vk-stat-user",
+    "sort": 2,
+    "_add_time": 1596416400000,
+    "icon": "",
+    "enable": true,
+    "name": "登录日志",
+    "url": "/pages/vk-stats/user/log"
+  },
+  {
+    "_id": "vk-stat-pay",
+    "menu_id": "vk-stat-pay",
+    "parent_id": "vk-stat",
+    "sort": 2,
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-data-line",
+    "name": "支付统计"
+  },
+  {
+    "_id": "vk-stat-pay-overview",
+    "menu_id": "vk-stat-pay-overview",
+    "parent_id": "vk-stat-pay",
+    "sort": 1,
+    "url": "/pages/vk-stats/pay/overview",
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-data-line",
+    "name": "概览"
+  },
+  {
+    "_id": "vk-stat-pay-ranking",
+    "menu_id": "vk-stat-pay-ranking",
+    "parent_id": "vk-stat-pay",
+    "sort": 2,
+    "url": "/pages/vk-stats/pay/ranking",
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "vk-icon-rank",
+    "name": "用户价值排行"
+  },
+  {
+    "_id": "vk-stat-pay-list",
+    "menu_id": "vk-stat-pay-list",
+    "parent_id": "vk-stat-pay",
+    "sort": 3,
+    "url": "/pages/vk-stats/pay/list",
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "",
+    "name": "订单明细"
+  },
+  {
+    "_id": "vk-stat-error",
+    "menu_id": "vk-stat-error",
+    "parent_id": "vk-stat",
+    "sort": 3,
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-warning-outline",
+    "name": "错误统计"
+  },
+  {
+    "_id": "vk-stat-error-cloud",
+    "menu_id": "vk-stat-error-cloud",
+    "parent_id": "vk-stat-error",
+    "sort": 1,
+    "url": "/pages/vk-stats/error/list",
+    "_add_time": 1596416400000,
+    "enable": true,
+    "icon": "el-icon-cloudy",
+    "name": "云端错误"
+  }
+]

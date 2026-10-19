@@ -1,0 +1,8 @@
+{
+  "vk.form.editor.placeholder": "Start typing...",
+  "vk.form.editor.videoNotSupported": "Your browser does not support video playback",
+  "vk.form.editor.multiImageUpload": "Upload Images",
+  "vk.form.editor.defaultAttachmentName": "Attachment",
+  "vk.form.editor.uploadFailed": "Upload failed: ",
+  "vk.form.fileSelect.placeholder": "Select file"
+}

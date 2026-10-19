@@ -1,0 +1,5 @@
+- 【升级】`vk-unicloud-admin-ui` 的 npm 包（执行`npm i vk-unicloud-admin-ui@1.25.5 --registry https://registry.npmjs.org/`）
+- 【升级】`vk依赖` [详情](https://ext.dcloud.net.cn/plugin?id=4157&update_log)
+- 【重要】恢复 `"runtime": "Nodejs18"` 配置，注意：此配置不兼容 `HBuilderX 5.15` 版本，请尽快升级到 HBuilderX 最新版
+- 【重要】修复定时任务在部分情况下可能不运行的问题
+- 【优化】定时任务日志优化，打印本次要执行的任务列表和本次不执行的任务列表

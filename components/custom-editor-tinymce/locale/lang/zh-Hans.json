@@ -1,0 +1,8 @@
+{
+  "vk.form.editor.placeholder": "开始输入...",
+  "vk.form.editor.videoNotSupported": "您的浏览器不支持播放此视频",
+  "vk.form.editor.multiImageUpload": "多图上传",
+  "vk.form.editor.defaultAttachmentName": "附件",
+  "vk.form.editor.uploadFailed": "上传失败: ",
+  "vk.form.fileSelect.placeholder": "请选择文件"
+}

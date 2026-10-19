@@ -1,0 +1,76 @@
+{
+  "pages": [
+    { "path": "pages/index/index" },
+    { "path": "pages/mes/schedules/list", "style": { "navigationBarTitleText": "MES 排班", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/audit/list", "style": { "navigationBarTitleText": "操作日志", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/ocr/config", "style": { "navigationBarTitleText": "OCR 配置", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/accounts/list", "style": { "navigationBarTitleText": "账号与权限", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/jobs/list", "style": { "navigationBarTitleText": "工单执行", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/orders/list", "style": { "navigationBarTitleText": "生产订单", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/dashboard/index", "style": { "navigationBarTitleText": "工作台", "topWindow": false, "leftWindow": false } },
+    { "path": "pages/mes/foundation/list", "style": { "navigationBarTitleText": "基础数据", "topWindow": false, "leftWindow": false } },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "topWindow": false,
+        "leftWindow": false,
+        "navigationBarTitleText": "登录"
+      }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "pages/vk-stats",
+      "pages": [
+        { "path": "user/overview", "style": { "navigationBarTitleText": "用户统计" } },
+        { "path": "user/log", "style": { "navigationBarTitleText": "用户登录日志" } },
+        { "path": "pay/overview", "style": { "navigationBarTitleText": "支付统计" } },
+        { "path": "pay/ranking", "style": { "navigationBarTitleText": "用户价值排行" } },
+        { "path": "pay/list", "style": { "navigationBarTitleText": "支付订单明细" } },
+        { "path": "error/list", "style": { "navigationBarTitleText": "云端错误统计" } }
+      ]
+    },
+    {
+      "root": "pages_plugs",
+      "pages": [
+        { "path": "error/404", "style": { "navigationBarTitleText": "页面不存在" } },
+        { "path": "error/403", "style": { "navigationBarTitleText": "无权访问" } },
+        { "path": "error/500", "style": { "navigationBarTitleText": "服务器出错了" } },
+        { "path": "system/user/list" },
+        { "path": "system/role/list" },
+        { "path": "system/permission/list" },
+        { "path": "system/menu/list" },
+        { "path": "system/app/list" },
+        { "path": "system/app-upgrade-center/list" },
+        { "path": "system_uni/vk-global-data" },
+        { "path": "system_uni/opendb-admin-log" },
+        { "path": "system_uni/vk-components-dynamic" },
+        { "path": "system_uni/uni-id-files/list" },
+        { "path": "system_uni/vk-ws-connection" },
+        { "path": "system_uni/lucky-draw/list", "style": { "navigationBarTitleText": "抽奖活动" } }
+      ]
+    }
+  ],
+  "globalStyle": {
+    "navigationStyle": "custom",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "管理后台",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8"
+  },
+  "topWindow": {
+    "path": "windows/topWindow",
+    "style": {
+      "height": "100px"
+    },
+    "matchMedia": {
+      "minWidth": 0
+    }
+  },
+  "leftWindow": {
+    "path": "windows/leftWindow",
+    "style": {
+      "width": "240px"
+    }
+  }
+}

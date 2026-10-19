@@ -1,0 +1,91 @@
+{
+  "bsonType": "object",
+  "required": ["activity_id", "start_time"],
+  "properties": {
+    "_id": {
+      "title": "ID"
+    },
+    "_add_time": {
+      "title": "活动创建时间",
+      "bsonType": "timestamp",
+      "forceDefaultValue": { "$env": "now" }
+    },
+    "activity_id": {
+      "title": "活动id",
+      "bsonType": "string"
+    },
+    "title": {
+      "title": "活动标题",
+      "bsonType": "string"
+    },
+    "sort": {
+      "title": "排序值",
+      "bsonType": "int",
+      "defaultValue": 0,
+      "description": "越大越靠前"
+    },
+    "enable": {
+      "title": "是否启用",
+      "bsonType": "bool",
+      "defaultValue": true,
+      "description": "启用后会显示在首页"
+    },
+    "cover_image": {
+      "title": "活动封面图",
+      "bsonType": "string"
+    },
+    "prize_list": {
+      "title": "奖品列表",
+      "bsonType": "array",
+      "properties": {
+        "name": {
+          "title": "奖品名称",
+          "bsonType": "string"
+        },
+        "num": {
+          "title": "奖品数量",
+          "bsonType": "int"
+        }
+      }
+    },
+    "mode": {
+      "title": "抽奖模式",
+      "bsonType": "int",
+      "enum": [
+        { "value": 1, "text": "极速抽奖" },
+        { "value": 2, "text": "高级抽奖" },
+        { "value": 3, "text": "大转盘" }
+      ]
+    },
+    "lottery_type": {
+      "title": "开奖方式",
+      "bsonType": "int",
+      "description": "仅 mode 为 1、2 时此字段才生效",
+      "enum": [
+        { "value": 1, "text": "按时间开奖" },
+        { "value": 2, "text": "按人数开奖" },
+        { "value": 3, "text": "手动开奖" }
+      ]
+    },
+    "start_time": {
+      "title": "活动开始时间",
+      "bsonType": "timestamp"
+    },
+    "end_time": {
+      "title": "活动结束时间",
+      "bsonType": "timestamp",
+      "description": "lottery_type 为 1 时必填"
+    },
+    "max_people": {
+      "title": "开奖人数",
+      "bsonType": "int",
+      "description": "lottery_type 为 2 时必填"
+    },
+    "key": {
+      "title": "使用的key",
+      "bsonType": "string",
+      "description": "经过aes加密，此值仅admin端会用到"
+    }
+  },
+  "version": "0.0.1"
+}

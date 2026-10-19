@@ -1,0 +1,50 @@
+.box-card {
+  margin: 5px;
+  .header {
+    display: flex;
+    .header-title {
+      flex: 1;
+    }
+  }
+  .box-card-body {
+    height: 70px;
+    line-height: 70px;
+  }
+  .box-card-contrast {
+    font-size: 14px;
+    display: flex;
+    flex-direction: row;
+    height: 21px;
+    .label {
+      color: #999999;
+    }
+    .value {
+      margin-left: 5px;
+      color: #40b6ff;
+      &.up {
+        color: #00ce8b;
+      }
+      &.down {
+        color: #fa5151;
+      }
+    }
+    .ml10 {
+      margin-left: 10px;
+    }
+  }
+  .num-view {
+    font-size: 28px;
+    .unit {
+      margin-left: 5px;
+    }
+  }
+}
+
+::v-deep {
+  .el-card__header {
+    padding: 12px 20px;
+    border-bottom: 1px solid #ebeef5;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+  }
+}
