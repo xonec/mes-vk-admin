@@ -156,5 +156,26 @@
         ]
       }
     ]
+  },
+  {
+    "menu_id": "mes-vk-system",
+    "name": "系统设置",
+    "children": [
+      {
+        "menu_id": "mes-vk-user",
+        "name": "用户管理",
+        "url": "/pages_plugs/system/user/list"
+      },
+      {
+        "menu_id": "mes-vk-role",
+        "name": "角色管理",
+        "url": "/pages_plugs/system/role/list"
+      },
+      {
+        "menu_id": "mes-vk-menu",
+        "name": "菜单管理",
+        "url": "/pages_plugs/system/menu/list"
+      }
+    ]
   }
 ]

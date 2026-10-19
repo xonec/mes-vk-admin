@@ -22,6 +22,9 @@
           success: (data) => {
             // 初始化菜单
             let { menus = [] } = data;
+            // MES 版：云端 opendb-admin-menus 与旧后台共享（其 url 属于旧后台 /pages/system/* 路径），
+            // 因此本后台暂不合并云端菜单，只用 static_menu 静态菜单；等 MES 菜单落到独立集合后再开启。
+            if (config.sideBar.enableCloudMenu === false) menus = [];
             // 合并去重
             menus = vk.pubfn.arr_concat(menus, config.sideBar.staticMenu, 'menu_id');
             // 排序

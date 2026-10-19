@@ -136,23 +136,8 @@
             { key: 'nickname', title: '昵称', type: 'text', width: 180, defaultValue: '未设置' },
             { key: 'mobile', title: '手机号', type: 'text', width: 120, defaultValue: '未绑定' },
             { key: 'email', title: '邮箱', type: 'text', width: 180, defaultValue: '未绑定' },
-            {
-              key: 'appList',
-              title: '可登录的应用',
-              type: 'html',
-              width: 220,
-              formatter: (val, row, column, index) => {
-                if (typeof row.dcloud_appid === 'undefined') return '全部应用';
-                if (row.dcloud_appid.length === 0) return '未绑定任何应用';
-                if (val.length === 0 && row.dcloud_appid.length > 0) return row.dcloud_appid;
-                let str = '';
-                val.map((item, index) => {
-                  str += `、${item.name}`;
-                });
-                if (str) str = str.substring(1);
-                return str;
-              },
-            },
+            // 「可登录的应用」列依赖 opendb-app-list 集合，本云空间未建该集合，读取会显示“加载失败”。
+            // 应用管理不是当前需求，先隐藏该列（backlog：等 P4 迁菜单/应用时再补集合）。
             {
               key: 'roleList',
               title: '角色',

@@ -163,6 +163,10 @@ export default {
   sideBar: {
     // 配置静态菜单列表
     staticMenu: staticMenu,
+    // 是否合并云端 opendb-admin-menus 菜单。
+    // MES 版设为 false：该集合与旧后台（mes-uniadmin）共享，里面是旧后台的 /pages/system/* 菜单，
+    // 合并进来会在 vk 后台出现打不开的菜单项。等 MES 菜单落到独立集合后再改回 true。
+    enableCloudMenu: false,
     defaultOpeneds: ['components-admin'], // 默认展开的菜单项的 menu_id
     navigateMode: 'redirectTo', // 默认 redirectTo，可选项为 navigateTo
   },

@@ -121,6 +121,6 @@
     },
     "tokenMaxLimit": 10,
     "preferedAppPlatform": "app-plus",
-    "preferedWebPlatform": "h5",
+    "preferedWebPlatform": "web",
     "removeDcloudAppid": false
 }
