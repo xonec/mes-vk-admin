@@ -6,6 +6,13 @@
  * - 云函数返回 { code, message, data }，code 非 0 统一抛错，401 回登录页；
  * - 长任务（OCR 识别、原图归档）单独放宽超时。
  *
+ * 返回值结构口径（两种，不要混用）：
+ * - 直调 production-operations（本文件 callCloud）：云函数返回 { code, message, data }，
+ *   这里统一解包后返回扁平的 data（页面拿到的就是 { list, total, ... }）；
+ * - 走 router mes/pub/*（façade）：vk 返回 { code, message, data }，业务结果在 data 里，
+ *   需要用 unwrapRouterData() 再取，避免把外层 code 当业务字段。
+ * 当前页面全部直调；以后统一走 façade 时只改调用点，不改页面里的取值方式（都先解包）。
+ *
  * 说明：P0 的 router façade 保留为可选路径；P1 页面先直调，避免依赖 router 上传。
  */
 
@@ -89,6 +96,24 @@ export function callCloud(target, action, payload = {}, options = {}) {
     if (!error || !error.transient) throw error;
     return new Promise((resolve) => setTimeout(resolve, 800)).then(send);
   });
+}
+
+/**
+ * 统一解包 router façade 返回值（仅未来统一走 router 时使用）。
+ * 直调口径：callCloud 已经解包，返回扁平业务结果 { list, total, ... }。
+ * façade 口径：{ code, message, data }，业务结果在 data 里；两种结构不要混用。
+ * @param {Object} response vk.callFunction 的返回（mes/pub/*）
+ * @return {Object} 业务结果
+ */
+export function unwrapRouterData(response) {
+  if (!response || typeof response !== 'object') return response;
+  if (typeof response.code !== 'number' || !response.data || typeof response.data !== 'object') return response;
+  if (response.code !== 0) {
+    const error = new Error(response.message || response.msg || '操作失败');
+    error.code = response.code;
+    throw error;
+  }
+  return response.data;
 }
 
 /** 时间戳格式化为本地时间；空值显示 —。 */

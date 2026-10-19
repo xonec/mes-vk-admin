@@ -4,11 +4,12 @@
       <div class="mes-vk-hero">
         <div>
           <div class="mes-vk-title">排班列表</div>
-          <div class="mes-vk-hint">数据直调 production-operations.listSchedules（只读）。日期范围与关键字由服务端过滤；工序/班次/车间在当前日期范围内本地过滤（范围过大时请先缩小日期）。日历与导入向导留到下一批。</div>
+          <div class="mes-vk-hint">数据直调 production-operations.listSchedules（只读）。日期范围与关键字由服务端过滤；工序/班次/车间在当前日期范围内本地过滤（范围过大时请先缩小日期）。导入向导：本地解析 Excel → 预览核对 → 分批写入（200 人次/批，断点续传）。</div>
         </div>
         <div class="mes-vk-tags">
           <el-tag size="small" type="success">只读</el-tag>
           <el-tag v-if="responseTime" size="small" type="info">本次读取 {{ responseTime }} ms</el-tag>
+          <el-button size="small" type="primary" icon="el-icon-upload2" @click="openImport">导入排班</el-button>
         </div>
       </div>
       <el-form :inline="true" size="small" @submit.native.prevent>
@@ -69,6 +70,8 @@
         </div>
       </div>
     </div>
+
+    <schedule-import-wizard :visible="importVisible" :catalogs="catalogs" :default-workshop-id="importDefaultWorkshopId" @close="importVisible = false" @imported="onImported"></schedule-import-wizard>
   </div>
 </template>
 
@@ -76,11 +79,12 @@
   import { callOperations } from '@/utils/call-operations.js';
   import { shiftTimeLabel } from '@/utils/shift-presets.js';
   import ScheduleCalendar from '@/components/mes/ScheduleCalendar.vue';
+  import ScheduleImportWizard from '@/components/mes/ScheduleImportWizard.vue';
 
   const LOAD_CAP = 1200;
 
   export default {
-    components: { ScheduleCalendar },
+    components: { ScheduleCalendar, ScheduleImportWizard },
     data() {
       const end = new Date();
       const start = new Date(end.getTime() - 6 * 86400000);
@@ -92,7 +96,8 @@
         truncated: false,
         serverTotal: 0,
         rows: [],
-        catalogs: { workshops: [], processes: [], shifts: [] },
+        catalogs: { workshops: [], processes: [], shifts: [], personnel: [], resources: [] },
+        importVisible: false,
         calendarMonth: '',
         calendarDays: [],
         calendarLoading: false,
@@ -146,6 +151,12 @@
       tableHeight() {
         return Math.max(360, window.innerHeight - 520);
       },
+      /** 导入向导默认车间：当前筛选车间优先，否则单车间自动选中。 */
+      importDefaultWorkshopId() {
+        if (this.query.workshopId) return this.query.workshopId;
+        const workshops = (this.catalogs.workshops || []).filter((row) => row.enabled !== false);
+        return workshops.length === 1 ? workshops[0]._id : '';
+      },
     },
     onLoad() {
       const now = new Date();
@@ -195,6 +206,25 @@
         } catch (error) {
           this.$message.warning('基础目录读取失败，工序/班次筛选不可用：' + (error && error.message ? error.message : error));
         }
+      },
+      /** 打开导入向导；向导走本地解析 + 分批导入，成功后由 onImported 刷新本页。 */
+      openImport() {
+        this.importVisible = true;
+      },
+      /** 导入完成后刷新日历与明细，并切到刚导入的日期便于核对。 */
+      async onImported(event) {
+        this.importVisible = false;
+        const date = event && event.date;
+        this.calendarCache = {};
+        if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          this.query.dateRange = [date, date];
+          this.selectedDate = date;
+          await this.loadCalendar(date.slice(0, 7), true);
+        } else {
+          await this.loadCalendar(this.calendarMonth, true);
+        }
+        await this.loadCatalogs();
+        await this.reload();
       },
       /** 按日期范围+关键字由服务端过滤；超过上限截断并提示。 */
       async reload() {
