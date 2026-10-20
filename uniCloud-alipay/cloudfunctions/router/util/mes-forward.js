@@ -56,6 +56,9 @@ const WRITE_ACTIONS = [
   'saveException', // 批 4：异常保存
 ];
 
+/** P3-B1 可切换写 action（跟随 mes-native-switch；回退时需要允许 forward）。 */
+const SWITCHABLE_WRITE_ACTIONS = ['saveCatalog', 'saveSchedule'];
+
 /**
  * 关于长耗时 action（重要）：
  * 支付宝云 router 内 `uniCloud.callFunction` 调用下游函数存在约 10000ms 的 HTTP 硬超时，
@@ -148,7 +151,8 @@ async function forward(event = {}, options = {}) {
   if (options.readOnly && !target.read.includes(action)) {
     return errorResult(403, 'P0 适配层只开放只读操作，写操作请继续使用旧后台：' + action);
   }
-  if (!target.read.includes(action) && !target.write.includes(action)) {
+  const switchableWrite = targetKey === 'operations' && SWITCHABLE_WRITE_ACTIONS.includes(action);
+  if (!target.read.includes(action) && !target.write.includes(action) && !switchableWrite) {
     return errorResult(403, 'MES 适配层未开放此操作：' + action);
   }
   const payload = { ...data, action };
@@ -165,4 +169,4 @@ async function forward(event = {}, options = {}) {
   return result;
 }
 
-module.exports = { forward, READ_ACTIONS, WRITE_ACTIONS, FUNCTIONS, TARGETS };
+module.exports = { forward, READ_ACTIONS, WRITE_ACTIONS, SWITCHABLE_WRITE_ACTIONS, FUNCTIONS, TARGETS };

@@ -1,10 +1,15 @@
 'use strict'
 /**
- * MES 原生化（P3-B）：只读模块需要的共享 helper，从 mes-operations/shared.js 内迁。
- * 当前只搬了 bootstrap / 列表 / 月历用到的部分；写模块（版本 CAS、租约、审计）在下一阶段再搬。
+ * MES 原生化（P3-B）
+ * - 只读部分：bootstrap / 列表 / 月历 / 报表等已内迁 helper。
+ * - 写部分（P3-B1 起）：从 mes-operations/shared.js 1:1 内迁 digest / 校验 / 版本 CAS save / 幂等 / 排班租约；
+ *   行为、错误码、错误文案与旧实现保持一致（本地双跑 diff=0）。
  */
+const { createHash, randomBytes } = require('crypto')
 const { ClientError } = require('./common')
-const { text } = require('./trace')
+const { batchIsValid } = require('./rules')
+const { text, actorName } = require('./trace')
+const { saveVersioned, stableKey, updatedCount, addImmutable, changes } = require('./versioned')
 
 const TYPES = ['workshops', 'processes', 'shifts', 'personnel', 'resources']
 const MAX_READ = 4000
@@ -17,6 +22,12 @@ function collection(type) {
     return 'mes_ops_' + type
 }
 
+/** 直接对已序列化文本取摘要，供批量导入复用同一份大字段。 */
+function digestText(value) { return createHash('sha256').update(value).digest('hex') }
+
+/** 稳定主键用于重试和自然唯一键。 */
+function digest(value) { return createHash('sha256').update(stableKey(value)).digest('hex') }
+
 /** 校验长度有限的实际标识，拒绝对象和模糊匹配。 */
 function identifier(value, label = '记录标识', required = true) {
     if (typeof value !== 'string' || !value.trim() || value.length > 220) {
@@ -26,6 +37,13 @@ function identifier(value, label = '记录标识', required = true) {
     return value.trim()
 }
 
+/** 校验完整生产批号，绝不通过前缀猜测产品。 */
+function batch(value) {
+    const valueText = text(value, 40).toUpperCase()
+    if (!batchIsValid(valueText)) throw new ClientError('请输入完整生产批号（含 B 单后缀）', 400)
+    return valueText
+}
+
 /** 校验真实公历日期，原始业务日期不接受宽松转换。 */
 function date(value, label = '日期') {
     const valueText = text(value, 20)
@@ -33,6 +51,45 @@ function date(value, label = '日期') {
     const instant = new Date(valueText + 'T00:00:00Z')
     if (!Number.isFinite(instant.getTime()) || instant.toISOString().slice(0, 10) !== valueText) throw new ClientError(label + '不是有效日期', 400)
     return valueText
+}
+
+/** 时间仅允许 24 小时制，跨日由开始和结束关系决定。 */
+function time(value, label = '时间') {
+    const valueText = text(value, 10)
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(valueText)) throw new ClientError(label + '须为 HH:mm', 400)
+    return valueText
+}
+
+/** 数量不补默认值；只接受有限、非负业务数字。 */
+function quantity(value, label, positive = false, maximum = 1000000000) {
+    if (value == null || value === '' || typeof value === 'boolean' || typeof value === 'object') throw new ClientError(label + '缺失', 400)
+    const result = Number(value)
+    if (!Number.isFinite(result) || result < 0 || (positive && result <= 0) || result > maximum) throw new ClientError(label + (positive ? '须为正数' : '须为非负数'), 400)
+    if (Math.abs(result * 1000000 - Math.round(result * 1000000)) > 0.0001) throw new ClientError(label + '最多保留 6 位小数', 400)
+    return result
+}
+
+/** 累计数字限制精度，避免浮点误差逐次放大（与 mes-operations 一致）。 */
+function plus(left, right) { return Math.round((Number(left || 0) + Number(right || 0)) * 1000000) / 1000000 }
+
+/** 必须明确提交版本，更新和新建均执行乐观锁。 */
+function expectedVersion(value) {
+    if (!Number.isInteger(value) || value < 0) throw new ClientError('请携带有效的当前版本，重新加载后保存', 409)
+    return value
+}
+
+/** 幂等键只由调用方生成一次，每次重试沿用原值。 */
+function requestId(value) {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,119}$/.test(value)) throw new ClientError('操作请求标识缺失或非法，请重新发起操作', 400)
+    return value
+}
+
+/** 数组必须逐项校验，拒绝截断造成悄然漏项。 */
+function ids(value, label, maximum = 100) {
+    if (!Array.isArray(value) || value.length > maximum) throw new ClientError(label + '须为数组且不超过 ' + maximum + ' 项', 400)
+    const result = value.map(item => identifier(item, label))
+    if (new Set(result).size !== result.length) throw new ClientError(label + '有重复项，请核对', 400)
+    return result
 }
 
 /** 查询主键记录，数据不存在时给出可处理的业务错误。 */
@@ -56,11 +113,6 @@ async function all(db, name, where = {}, maximum = MAX_READ, orderField = '_id')
     return result
 }
 
-/** 累计数字限制精度，避免浮点误差逐次放大（与 mes-operations 一致）。 */
-function plus(left, right) {
-    return Math.round((Number(left || 0) + Number(right || 0)) * 1000000) / 1000000
-}
-
 /** 集合查询条件只由服务端组装，独立条件使用 AND 组合。 */
 function and(db, ...conditions) {
     const values = conditions.filter(value => value && Object.keys(value).length)
@@ -80,10 +132,92 @@ async function list(db, type, event, scope = {}, fields = ['name'], filters = {}
     return { list: rows, total: counted.total || 0, page, pageSize }
 }
 
+/** 业务内容和服务端审计一并写入 CAS 版本，不存在独立事件插入窗口。 */
+async function save(db, type, id, record, profile, version, reason, authorizeChange, options) {
+    expectedVersion(version)
+    const business = { ...record, entityType: type }
+    delete business._id; delete business.version; delete business.audit; delete business.updatedAt; delete business.updatedBy; delete business.changeReason
+    const signature = source => stableKey(Object.fromEntries(Object.keys(business).map(key => [key, source[key] === undefined ? null : source[key]])))
+    const name = profile.name || await actorName(db, profile.uid)
+    let result
+    try {
+        result = await saveVersioned(db, {
+            collection: collection(type), versions: VERSIONS, keyField: 'entityId', key: id, id,
+            record: business, uid: profile.uid, expectedVersion: version, signature,
+            authorizeChange: old => {
+                if (old && signature(old) !== signature(business) && !text(reason, 1000)) throw new ClientError('修改资料请填写原因，便于追溯', 400)
+                if (authorizeChange) authorizeChange(old)
+            },
+            audit: (old, nextVersion) => ({ actorId: profile.uid, actorName: name, at: Date.now(), reason: text(reason, 1000) || '首次录入', action: old ? 'update' : 'create', previousVersion: old ? old.version : 0, version: nextVersion, changedFields: changes(old, business, stableKey).map(item => item.field) }),
+            current: options && options.current
+        })
+    } catch (error) {
+        if (duplicateError(error)) throw new ClientError('唯一编码、账号或排班组合已存在，请刷新核对', 409)
+        throw error
+    }
+    // 批量导入在人员租约内写入，落库内容即为当前版本，不必再多读一次。
+    if (options && options.skipReread && result.record) return result.record
+    // 当前记录可能已经被其他操作继续推进，返回本次实际接受版本。
+    const current = await get(db, type, id)
+    if (current.version === result.version) return current
+    const archived = ((await db.collection(VERSIONS).doc('ver:' + id + ':' + result.version).get()).data || [])[0]
+    if (archived && archived.snapshot) return archived.snapshot
+    throw new ClientError('保存结果已变化，请刷新当前记录', 409)
+}
+
 /** 读取某条记录的完整版本历史（归档快照 + 当前记录），按版本升序。 */
 async function history(db, type, record) {
     const archived = await all(db, VERSIONS, { entityId: record._id, version: db.command.lt(record.version) }, 2000, 'version')
     return [...archived.map(item => item.snapshot).filter(Boolean), record].sort((left, right) => left.version - right.version)
 }
 
-module.exports = { TYPES, MAX_READ, VERSIONS, collection, identifier, date, text, get, all, and, list, plus, history }
+/** 从已接受快照读取幂等操作结果，相同请求不重复累计数量。 */
+async function priorRequest(db, type, current, id, signature) {
+    const currentEvent = current.event
+    const found = currentEvent && currentEvent.requestId === id ? current : ((await db.collection(VERSIONS).where({ entityId: current._id, version: db.command.lt(current.version), 'snapshot.event.requestId': id }).limit(2).get()).data || []).map(item => item.snapshot).find(Boolean)
+    if (!found) return null
+    if (!found.event || found.event.signature !== signature) throw new ClientError('同一请求标识已提交不同内容，请刷新核对', 409)
+    return found
+}
+
+/** 生成完整服务端事件，不信任客户端操作人或时间。 */
+function event(profile, type, id, signature, data = {}) {
+    return { ...data, type, requestId: id, signature, at: Date.now(), actorId: profile.uid, actorName: profile.name }
+}
+
+/** 取得同一员工的排班租约，返回释放函数；批量导入按人复用同一租约。 */
+async function acquireScheduleLock(db, personId) {
+    const id = 'schedule-person:' + digest(personId)
+    const owner = randomBytes(16).toString('hex')
+    const expiresAt = Date.now() + 600000
+    const lock = await addImmutable(db, 'mes_ops_locks', { _id: id, owner, expiresAt })
+    if (lock.owner !== owner) {
+        const count = updatedCount(await db.collection('mes_ops_locks').where({ _id: id, expiresAt: db.command.lte(Date.now()) }).update({ owner, expiresAt }))
+        if (!count) throw new ClientError('该人员排班正在保存，请稍后重试', 409)
+    }
+    // 云端支持删除租约时直接删除，下次可获得一次写入；测试或旧版本回退为过期标记。
+    return async () => {
+        const query = db.collection('mes_ops_locks').where({ _id: id, owner })
+        if (typeof query.remove === 'function') {
+            try { await query.remove(); return } catch (error) { console.warn('[mes-native] 排班租约删除失败，改为过期标记', error.message) }
+        }
+        await db.collection('mes_ops_locks').where({ _id: id, owner }).update({ expiresAt: 0 }).catch(error => console.warn('[mes-native] 排班租约释放失败', error.message))
+    }
+}
+
+/** 单条写入持有租约期间完成全部检查与写库，防止并发提交绕过时间重叠检查。 */
+async function withScheduleLock(db, personId, callback) {
+    const release = await acquireScheduleLock(db, personId)
+    try { return await callback() } finally { await release() }
+}
+
+/** 唯一键/并发写冲突归类（与旧实现 save 的错误归一一致）。 */
+function duplicateError(error) { return /duplicate|already.*exist|document.*exist|重复|已存在|E11000/i.test(String(error && (error.message || error.errMsg) || error)) }
+
+module.exports = {
+    TYPES, MAX_READ, VERSIONS,
+    collection, digest, digestText, identifier, batch, date, time, quantity, plus,
+    expectedVersion, requestId, ids, get, all, and, list,
+    save, history, priorRequest, event, withScheduleLock, acquireScheduleLock,
+    text, stableKey, addImmutable, changes,
+}

@@ -13,14 +13,15 @@
     ],
     "main": "main.js",
     "scripts": {
-        "test": "node tests/order-drawer.test.cjs && node tests/schedule-calendar.test.cjs && node tests/schedule-import-rules.test.cjs && node tests/schedule-import-session.test.cjs && node tests/router-mes-scope.test.cjs && node tests/router-mes-calendar.test.cjs && node tests/router-mes-list.test.cjs && node tests/router-mes-reports.test.cjs && node tests/router-mes-attendance.test.cjs && node tests/router-mes-jobs.test.cjs && node tests/router-mes-audit.test.cjs && node tests/router-mes-dispatch.test.cjs && node tests/router-mes-write-forward.test.cjs && node tests/router-mes-multi-target-forward.test.cjs && node tests/router-mes-batch6-forward.test.cjs && node tests/router-mes-batch7-ocr-config.test.cjs",
+        "test": "node tests/order-drawer.test.cjs && node tests/schedule-calendar.test.cjs && node tests/schedule-import-rules.test.cjs && node tests/schedule-import-session.test.cjs && node tests/router-mes-scope.test.cjs && node tests/router-mes-calendar.test.cjs && node tests/router-mes-list.test.cjs && node tests/router-mes-reports.test.cjs && node tests/router-mes-attendance.test.cjs && node tests/router-mes-jobs.test.cjs && node tests/router-mes-audit.test.cjs && node tests/router-mes-dispatch.test.cjs && node tests/router-mes-write-forward.test.cjs && node tests/router-mes-multi-target-forward.test.cjs && node tests/router-mes-batch6-forward.test.cjs && node tests/router-mes-batch7-ocr-config.test.cjs && node tests/router-mes-catalogs-write.test.cjs && node tests/router-mes-schedules-write.test.cjs && node tests/router-mes-switchable-write.test.cjs && node tests/router-mes-switch.test.cjs",
+        "test:mes-switch": "node tests/router-mes-switch.test.cjs",
         "test:order-drawer": "node tests/order-drawer.test.cjs",
         "test:calendar": "node tests/schedule-calendar.test.cjs",
         "test:import-rules": "node tests/schedule-import-rules.test.cjs",
         "test:import-session": "node tests/schedule-import-session.test.cjs",
         "test:router-mes": "node tests/router-mes-scope.test.cjs && node tests/router-mes-calendar.test.cjs && node tests/router-mes-list.test.cjs && node tests/router-mes-dispatch.test.cjs",
         "test:write-forward": "node tests/router-mes-write-forward.test.cjs",
-        "test:multi-target": "node tests/router-mes-multi-target-forward.test.cjs && node tests/router-mes-batch6-forward.test.cjs && node tests/router-mes-batch7-ocr-config.test.cjs"
+        "test:multi-target": "node tests/router-mes-multi-target-forward.test.cjs && node tests/router-mes-batch6-forward.test.cjs && node tests/router-mes-batch7-ocr-config.test.cjs && node tests/router-mes-catalogs-write.test.cjs && node tests/router-mes-schedules-write.test.cjs && node tests/router-mes-switchable-write.test.cjs"
     },
     "repository": "https://gitee.com/vk-uni/vk-unicloud-admin",
     "author": "VK",

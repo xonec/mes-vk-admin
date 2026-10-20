@@ -140,7 +140,7 @@ async function test(name, fn) {
     await test('未登记 action 在 native 分支明确报错，不影响已迁移 action', async () => {
         const db = seed(makeDb())
         routing.clearCache()
-        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'saveSchedule', mode: 'native' })
+        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'saveAttendance', mode: 'native' })
         assert.equal(result.code, 500)
         assert.match(result.message, /未登记/)
     })

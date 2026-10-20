@@ -33,6 +33,12 @@ const DEFAULT_ACTIONS = {
     audit: 'native',
 }
 
+/**
+ * P3-B1 可切换写 action：跟随 mes-native-switch（先 forward、后 native、可回退），
+ * 与批 3/4 的「固定 forward 写」不同（后者在 mes-forward.WRITE_ACTIONS，永远不 native）。
+ */
+const SWITCHABLE_WRITE_ACTIONS = ['saveCatalog', 'saveSchedule']
+
 let cache = { at: 0, actions: null }
 
 /** 读开关配置；失败按“未配置”处理，绝不因此拒绝请求。 */
@@ -64,4 +70,4 @@ function clearCache() {
     cache = { at: 0, actions: null }
 }
 
-module.exports = { resolveMode, clearCache, DEFAULT_ACTIONS, CONFIG_ID, CONFIG_COLLECTION }
+module.exports = { resolveMode, clearCache, DEFAULT_ACTIONS, SWITCHABLE_WRITE_ACTIONS, CONFIG_ID, CONFIG_COLLECTION }

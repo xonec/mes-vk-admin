@@ -8,6 +8,8 @@ const attendance = require('./attendance-read')
 const jobs = require('./jobs-read')
 const handovers = require('./handovers-read')
 const auditRead = require('./audit-read')
+const { saveCatalog } = require('./catalogs-write')
+const { saveSchedule } = require('./schedules-write')
 
 const handlers = {
     // 第 1 模块：scope/profile + bootstrap
@@ -32,6 +34,9 @@ const handlers = {
     listExceptions: (db, profile, input) => handovers.listExceptions(db, profile, input),
     // 第 6 模块：操作审计（含日期范围参数）
     audit: (db, profile, input) => auditRead.audit(db, profile, input),
+    // P3-B1：catalogs / schedules 写（灰度开关控制，默认 forward 直到切换）
+    saveCatalog: (db, profile, input) => saveCatalog(db, profile, input),
+    saveSchedule: (db, profile, input) => saveSchedule(db, profile, input),
 }
 
 module.exports = { handlers }

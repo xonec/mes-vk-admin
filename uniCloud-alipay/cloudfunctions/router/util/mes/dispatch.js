@@ -54,13 +54,27 @@ async function dispatch(event, options = {}) {
     }
 
     let mode
-    try {
-        mode = await routing.resolveMode(db, action, options)
-    } catch (error) {
-        console.warn('[mes-native] 灰度开关解析失败，回退 forward：', error && error.message)
-        mode = 'forward'
+    const switchableWrite = routing.SWITCHABLE_WRITE_ACTIONS.includes(action)
+    if (switchableWrite) {
+        // P3-B1：可切换写 action（saveCatalog/saveSchedule）跟随灰度开关；
+        // 先 forward（可回退旧实现）后 native。forward 时按写处理，不传 readOnly。
+        if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
+        try {
+            mode = await routing.resolveMode(db, action, options)
+        } catch (error) {
+            console.warn('[mes-native] 灰度开关解析失败，回退 forward：', error && error.message)
+            mode = 'forward'
+        }
+        if (mode !== 'native') return (options.forward || forwardByDefault)(event, { action, readOnly: false })
+    } else {
+        try {
+            mode = await routing.resolveMode(db, action, options)
+        } catch (error) {
+            console.warn('[mes-native] 灰度开关解析失败，回退 forward：', error && error.message)
+            mode = 'forward'
+        }
+        if (mode !== 'native') return (options.forward || forwardByDefault)(event, { action, readOnly: options.readOnly === true })
     }
-    if (mode !== 'native') return (options.forward || forwardByDefault)(event, { action, readOnly: options.readOnly === true })
 
     try {
         const auth = await checkAuth(db, event.uniIdToken, uniID)
