@@ -34,10 +34,16 @@ const DEFAULT_ACTIONS = {
 }
 
 /**
- * P3-B1 可切换写 action：跟随 mes-native-switch（先 forward、后 native、可回退），
- * 与批 3/4 的「固定 forward 写」不同（后者在 mes-forward.WRITE_ACTIONS，永远不 native）。
+ * 可切换写 action：跟随 mes-native-switch（先 forward、后 native、可回退）。
+ * - P3-B1：catalogs / schedules（saveCatalog/saveSchedule）
+ * - P3-B2：jobs / handovers / exceptions（createJob/jobCommand/saveHandover/handoverCommand/saveException/resolveException）
+ * 这也是 mes-switch 允许写入的 key 白名单（native-switch.js 直接校验本数组）。
  */
-const SWITCHABLE_WRITE_ACTIONS = ['saveCatalog', 'saveSchedule']
+const SWITCHABLE_WRITE_ACTIONS = [
+    'saveCatalog', 'saveSchedule',
+    'createJob', 'jobCommand',
+    'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
+]
 
 let cache = { at: 0, actions: null }
 

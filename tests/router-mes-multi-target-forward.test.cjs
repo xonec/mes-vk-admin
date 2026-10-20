@@ -4,7 +4,7 @@ const { createMemoryDb } = require('./helpers/router-memory-db.cjs')
 const { dispatch } = require('../uniCloud-alipay/cloudfunctions/router/util/mes/dispatch.js')
 const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routing.js')
 const forwardModule = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
-const { forward, TARGETS, FUNCTIONS, READ_ACTIONS, WRITE_ACTIONS } = forwardModule
+const { forward, TARGETS, FUNCTIONS, READ_ACTIONS } = forwardModule
 const ENTRIES = {
     orders: require('../uniCloud-alipay/cloudfunctions/router/service/mes/pub/orders.js'),
     ocr: require('../uniCloud-alipay/cloudfunctions/router/service/mes/pub/ocr.js'),

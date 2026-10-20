@@ -10,6 +10,8 @@ const handovers = require('./handovers-read')
 const auditRead = require('./audit-read')
 const { saveCatalog } = require('./catalogs-write')
 const { saveSchedule } = require('./schedules-write')
+const { createJob, jobCommand } = require('./jobs-write')
+const { saveHandover, handoverCommand, saveException, resolveException } = require('./handovers-write')
 
 const handlers = {
     // 第 1 模块：scope/profile + bootstrap
@@ -37,6 +39,13 @@ const handlers = {
     // P3-B1：catalogs / schedules 写（灰度开关控制，默认 forward 直到切换）
     saveCatalog: (db, profile, input) => saveCatalog(db, profile, input),
     saveSchedule: (db, profile, input) => saveSchedule(db, profile, input),
+    // P3-B2：工单 / 交接班 / 异常写（可切换写，跟随 mes-native-switch）
+    createJob: (db, profile, input) => createJob(db, profile, input),
+    jobCommand: (db, profile, input) => jobCommand(db, profile, input),
+    saveHandover: (db, profile, input) => saveHandover(db, profile, input),
+    handoverCommand: (db, profile, input) => handoverCommand(db, profile, input),
+    saveException: (db, profile, input) => saveException(db, profile, input),
+    resolveException: (db, profile, input) => resolveException(db, profile, input),
 }
 
 module.exports = { handlers }

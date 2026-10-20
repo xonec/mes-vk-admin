@@ -10,15 +10,8 @@ const { collection, digest, identifier, batch, date, text, get, all, and, save, 
 const { active, visible, requireSupervisor } = require('./scope')
 const { shiftPeriod } = require('./shift-time')
 const { syncPersonAttendance } = require('./attendance-sync')
-
-/** 与 mes-document-store/order-trace.getOrderByBatch 一致：按完整批号取订单，不截断不猜测。 */
-async function getOrderByBatch(db, batchNo) {
-    const code = text(batchNo, 40).toUpperCase()
-    if (!batchIsValid(code)) throw new ClientError('批号须为11 位字母数字或其后的 B 单后缀', 400)
-    const rows = (await db.collection('production_orders').where({ batchNo: code }).limit(2).get()).data || []
-    if (rows.length > 1) throw new ClientError('此批号关联多个早期订单，请管理员先核对', 409)
-    return rows[0] || null
-}
+// P3-B2：getOrderByBatch 抽到 order-trace（排班/派工共用），这里保留同名导入与再导出。
+const { getOrderByBatch } = require('./order-trace')
 
 /** 将排班转换为绝对分钟，午夜接续和相邻日期都能检查重叠。 */
 function interval(record) {

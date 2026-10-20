@@ -11,7 +11,6 @@ const { checkAuth, ok, fail, ClientError } = require('./common')
 const scope = require('./scope')
 const { handlers } = require('./handlers')
 const routing = require('./routing')
-const { WRITE_ACTIONS } = require('../mes-forward.js')
 
 const RESERVED = ['$url', 'uniIdToken', 'uni_id_token', 'vk', 'context', 'action']
 
@@ -47,17 +46,12 @@ async function dispatch(event, options = {}) {
     const { db, uniID } = util
     if (!db) return fail(500, 'MES 服务未就绪，请稍后重试')
 
-    // P2 批 3-4：白名单写操作固定 forward（旧实现做权限/scope/冲突校验），不参与灰度开关。
-    if (WRITE_ACTIONS.includes(action)) {
-        if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
-        return (options.forward || forwardByDefault)(event, { action, readOnly: false })
-    }
-
+    // P2 批 3-4 的写操作已在 P3-B2 全部并入可切换写（不再有「固定 forward 写」白名单）。
     let mode
     const switchableWrite = routing.SWITCHABLE_WRITE_ACTIONS.includes(action)
     if (switchableWrite) {
-        // P3-B1：可切换写 action（saveCatalog/saveSchedule）跟随灰度开关；
-        // 先 forward（可回退旧实现）后 native。forward 时按写处理，不传 readOnly。
+        // P3-B1/B2：可切换写 action 跟随灰度开关；先 forward（可回退旧实现）后 native。
+        // forward 时按写处理，不传 readOnly。
         if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
         try {
             mode = await routing.resolveMode(db, action, options)

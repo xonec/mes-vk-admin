@@ -5,7 +5,7 @@
  * 原则：这里不写业务逻辑；P3 原生化时再逐个替换为 router service 原生实现。
  *
  * P2 批 5：按目标函数拆出 orders / ocr / materials 三个 target，
- * 各带独立读写白名单与转发超时；写 action 固定 forward，不参与 mes-native-switch。
+ * 各带独立读写白名单与转发超时；非 operations target 的写 action 固定 forward、不参与 mes-native-switch。
  */
 
 /** 允许转发的目标云函数（常量登记；开放 action 必须逐条评审）。 */
@@ -45,19 +45,15 @@ const READ_ACTIONS = [
 ];
 
 /**
- * 写 action 白名单（P2 批 3-4）：固定走 forward 到 production-operations，
- * 由旧实现自己做权限/scope/冲突校验；不参与 mes-native-switch，避免被误切 native。
- * 新增写 action 前需登记并评审（P3 写模块 native 内迁时再移除）。
+ * 可切换写 action（P3-B1/B2）：跟随 mes-native-switch，回退时需要允许 forward。
+ * 原 P2 批 3-4 的「固定 forward 写」白名单（jobCommand/saveHandover/handoverCommand/saveException）
+ * 已在 P3-B2 全部并入本清单，不再有永远 forward 的写 action。
  */
-const WRITE_ACTIONS = [
-  'jobCommand', // 批 3：工单开工/暂停/继续/报产/入库/完工
-  'saveHandover', // 批 4：交接班保存
-  'handoverCommand', // 批 4：交接班提交/接班
-  'saveException', // 批 4：异常保存
+const SWITCHABLE_WRITE_ACTIONS = [
+  'saveCatalog', 'saveSchedule',
+  'createJob', 'jobCommand',
+  'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
 ];
-
-/** P3-B1 可切换写 action（跟随 mes-native-switch；回退时需要允许 forward）。 */
-const SWITCHABLE_WRITE_ACTIONS = ['saveCatalog', 'saveSchedule'];
 
 /**
  * 关于长耗时 action（重要）：
@@ -71,13 +67,14 @@ const SWITCHABLE_WRITE_ACTIONS = ['saveCatalog', 'saveSchedule'];
 
 /**
  * 目标函数 → 白名单与超时。action 必须精确命中对应名单，否则 403 且不发起转发。
- * operations 沿用批 3/4 的读写名单；其余三个 target 是 P2 批 5 指令单三步流程。
+ * operations 的读沿用原白名单、写为可切换写（P3-B1/B2，跟随 mes-native-switch）；其余 target 见各自白名单。
  */
 const TARGETS = {
   operations: {
     name: FUNCTIONS.operations,
     read: READ_ACTIONS,
-    write: WRITE_ACTIONS,
+    // operations 的写 action 全部是可切换写（跟随 mes-native-switch）
+    write: SWITCHABLE_WRITE_ACTIONS,
   },
   orders: {
     name: FUNCTIONS.orders,
@@ -169,4 +166,4 @@ async function forward(event = {}, options = {}) {
   return result;
 }
 
-module.exports = { forward, READ_ACTIONS, WRITE_ACTIONS, SWITCHABLE_WRITE_ACTIONS, FUNCTIONS, TARGETS };
+module.exports = { forward, READ_ACTIONS, SWITCHABLE_WRITE_ACTIONS, FUNCTIONS, TARGETS };

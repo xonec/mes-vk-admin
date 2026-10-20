@@ -4,7 +4,7 @@ const { createMemoryDb } = require('./helpers/router-memory-db.cjs')
 const { dispatch, payloadOf } = require('../uniCloud-alipay/cloudfunctions/router/util/mes/dispatch.js')
 const common = require('../uniCloud-alipay/cloudfunctions/router/util/mes/common.js')
 const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routing.js')
-const { forward, WRITE_ACTIONS, FUNCTIONS } = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
+const { forward, FUNCTIONS } = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
 const operationEntry = require('../uniCloud-alipay/cloudfunctions/router/service/mes/pub/operation.js')
 
 function makeDb() {
@@ -158,8 +158,8 @@ async function test(name, fn) {
         assert.equal(result.errCode, 503)
     })
 
-    await test('写白名单常量：首批 4 个写 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
-        assert.deepEqual([...WRITE_ACTIONS].sort(), ['handoverCommand', 'jobCommand', 'saveException', 'saveHandover'])
+    await test('可切换写常量：P3-B1/B2 共 8 个 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
+        assert.deepEqual([...routing.SWITCHABLE_WRITE_ACTIONS].sort(), ['createJob', 'handoverCommand', 'jobCommand', 'resolveException', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule'])
         assert.equal(FUNCTIONS.operations, 'production-operations')
         assert.equal(FUNCTIONS.orders, 'production-orders')
         assert.equal(FUNCTIONS.ocr, 'doc-ocr')
@@ -168,7 +168,7 @@ async function test(name, fn) {
         assert.equal(FUNCTIONS.batches, 'batch-buckets')
     })
 
-    await test('白名单写 action：有 token 固定 forward（readOnly=false）并原样透传结果', async () => {
+    await test('可切换写 action：默认（开关未配置）forward（readOnly=false）并原样透传结果', async () => {
         const db = seed(makeDb())
         routing.clearCache()
         const calls = []
@@ -185,7 +185,7 @@ async function test(name, fn) {
         const db = seed(makeDb())
         routing.clearCache()
         let called = false
-        for (const action of WRITE_ACTIONS) {
+        for (const action of routing.SWITCHABLE_WRITE_ACTIONS) {
             const result = await dispatch({ data: {}, util: { db, uniID: makeUniID() } }, { action, forward: async () => { called = true; return { code: 0 } } })
             assert.equal(result.code, 401)
             assert.equal(result.message, '未登录')
@@ -212,17 +212,17 @@ async function test(name, fn) {
         assert.deepEqual(result, upstream)
     })
 
-    await test('灰度开关不能把白名单写 action 切成 native（固定 forward）', async () => {
+    await test('灰度开关=native：原批 3/4 写 action 走 native（不再固定 forward）', async () => {
         const db = seed(makeDb())
         db.ensure('vk-global-data').set('mes-native-switch', { _id: 'mes-native-switch', actions: { jobCommand: 'native', saveHandover: 'native' } })
         routing.clearCache()
         const calls = []
         const result = await dispatch(
-            { data: { id: 'job:1' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
-            { action: 'jobCommand', mode: 'native', forward: async (event, options) => { calls.push(options.action); return { code: 0, message: 'ok', data: { via: 'forward' } } } }
+            { data: { id: 'job:not-exist' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+            { action: 'jobCommand', forward: async (event, options) => { calls.push(options.action); return { code: 0, message: 'ok', data: { via: 'forward' } } } }
         )
-        assert.deepEqual(calls, ['jobCommand'])
-        assert.equal(result.data.via, 'forward')
+        assert.deepEqual(calls, [], 'native 不应调用 forward')
+        assert.equal(result.code, 404, 'native handler 真实执行（工单不存在返回 404）')
         routing.clearCache()
     })
 

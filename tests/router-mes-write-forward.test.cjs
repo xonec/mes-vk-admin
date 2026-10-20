@@ -1,10 +1,10 @@
-// P2 批 3/4 写操作转发白名单：action 级用例（白名单、参数透传、token、错误透传、边界）。
+// P2 批 3/4 写操作（P3-B2 起并入可切换写）：forward 通道 action 级用例（参数透传、token、错误透传、边界）。
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const { createMemoryDb } = require('./helpers/router-memory-db.cjs')
 const { dispatch } = require('../uniCloud-alipay/cloudfunctions/router/util/mes/dispatch.js')
 const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routing.js')
-const { forward, WRITE_ACTIONS, READ_ACTIONS, FUNCTIONS } = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
+const { forward, SWITCHABLE_WRITE_ACTIONS, READ_ACTIONS, FUNCTIONS } = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
 const operationEntry = require('../uniCloud-alipay/cloudfunctions/router/service/mes/pub/operation.js')
 
 function makeDb() {
@@ -78,11 +78,11 @@ async function test(name, fn) {
 }
 
 ;(async () => {
-    console.log('\nP2 写操作转发白名单（action 级）测试')
+    console.log('\n写操作 forward 通道（action 级）测试')
 
-    await test('白名单与只读白名单不重叠，首批 4 个写 action', () => {
-        assert.deepEqual([...WRITE_ACTIONS].sort(), ['handoverCommand', 'jobCommand', 'saveException', 'saveHandover'])
-        const overlap = WRITE_ACTIONS.filter((action) => READ_ACTIONS.includes(action))
+    await test('可切换写清单与只读白名单不重叠（P3-B1/B2 共 8 个）', () => {
+        assert.deepEqual([...SWITCHABLE_WRITE_ACTIONS].sort(), ['createJob', 'handoverCommand', 'jobCommand', 'resolveException', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule'])
+        const overlap = SWITCHABLE_WRITE_ACTIONS.filter((action) => READ_ACTIONS.includes(action))
         assert.deepEqual(overlap, [])
     })
 
