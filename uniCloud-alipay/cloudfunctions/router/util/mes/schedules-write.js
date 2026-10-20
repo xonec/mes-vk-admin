@@ -1,12 +1,13 @@
 'use strict'
 /**
  * P3-B1：从 mes-operations/schedules.js 内迁 saveSchedule（页面单条保存路径）。
- * 1:1 保留权限、人员/工序/车间校验、版本 CAS、时间冲突、批号关联、导入来源、人员租约与考勤联动；
- * 批量导入专用路径（batch/cache/importMeta）不在本组范围（导入仍 forward），因此这里 batch 恒为 null。
+ * P3-C1：补齐批量导入参数（importMeta / replacement / batch.cache / batch.locks / batch.attendance）；
+ * 单条保存路径参数默认值不变（cache=null、importMeta=undefined、replacement=[]、batchImport=null），行为零变化。
+ * 1:1 保留权限、人员/工序/车间校验、版本 CAS、时间冲突、批号关联、导入来源、人员租约与考勤联动。
  */
 const { ClientError } = require('./common')
 const { batchIsValid, scheduleBatchIsValid } = require('./rules')
-const { collection, digest, identifier, batch, date, text, get, all, and, save, expectedVersion } = require('./shared')
+const { collection, digest, identifier, batch, date, text, get, all, and, save, expectedVersion, withScheduleLock, acquireScheduleLock } = require('./shared')
 const { active, visible, requireSupervisor } = require('./scope')
 const { shiftPeriod } = require('./shift-time')
 const { syncPersonAttendance } = require('./attendance-sync')
@@ -57,26 +58,38 @@ function scheduleImportSource(source) {
     return record
 }
 
-/** 预取命中时用缓存的目录资料，未命中回退单条读取（单条保存路径 cache 恒空）。 */
+/** 预取命中时用缓存的目录资料，未命中回退单条读取，错误口径保持一致（单条保存路径 cache 恒空）。 */
 async function cachedActive(db, cache, type, id) {
+    if (cache) {
+        const found = cache.catalog(type, id)
+        if (found.hit) {
+            if (!found.record) throw new ClientError('记录不存在，请刷新', 404)
+            if (found.record.enabled === false) throw new ClientError('所选资料已停用，请重新选择', 400)
+            return found.record
+        }
+    }
     return active(db, type, id)
 }
 /** 预取命中时不再重复读取已有排班（单条保存路径 cache 恒空）。 */
 async function cachedSchedule(db, cache, id) {
+    if (cache) { const found = cache.schedule(id); if (found.hit) return found.record }
     return get(db, 'schedules', id, false)
 }
-/** 预取命中时复用批次订单（单条保存路径 cache 恒空）。 */
+/** 预取命中时复用批次订单，重复批号仍旧报错（单条保存路径 cache 恒空）。 */
 async function cachedOrder(db, cache, batchNo) {
+    if (cache) {
+        const found = cache.orders(batchNo)
+        if (found) {
+            if (found.length > 1) throw new ClientError('此批号关联多个早期订单，请管理员先核对', 409)
+            return found[0] || null
+        }
+    }
     return getOrderByBatch(db, batchNo)
 }
 
 /** 保存排班引用和冻结名称；人员、工序必须属于同一车间。 */
-async function saveSchedule(db, profile, input) {
-    // 本组只迁页面单条保存：导入批量路径（cache/replacement/batch/importMeta）保持 forward。
-    const cache = null
-    const importMeta = undefined
-    const replacement = []
-    const batchImport = null
+async function saveSchedule(db, profile, input, importMeta, replacement = [], batchImport = null) {
+    const cache = batchImport ? batchImport.cache : null
     const source = input.record || {}
     const version = expectedVersion(input.expectedVersion)
     const kind = source.kind || 'work'
@@ -160,12 +173,20 @@ async function saveSchedule(db, profile, input) {
             if (previous) { visible(profile, 'schedules', previous); requireSupervisor(profile, previous) }
         }, cache ? { current: old || null, skipReread: true } : undefined)
         if (cache) cache.putSchedule(result)
-        // 单条保存路径：直接同步本人当天考勤（批量导入按人员每日收敛，本组不迁）。
+        // 批量导入把考勤同步收敛到每人员每日一次，避免同一人当天多工序反复重算。
+        if (batchImport) {
+            if (old && old.date !== record.date) batchImport.attendance.add(record.personId + '\u0000' + old.date)
+            batchImport.attendance.add(record.personId + '\u0000' + record.date)
+            return result
+        }
+        // 单条保存路径：直接同步本人当天考勤。
         if (old && old.date !== record.date) await syncPersonAttendance(db, profile, record.personId, old.date)
         await syncPersonAttendance(db, profile, record.personId, record.date)
         return result
     }
-    return withScheduleLockNative(db, record.personId, write)
+    if (!batchImport) return withScheduleLockNative(db, record.personId, write)
+    if (!batchImport.locks.has(record.personId)) batchImport.locks.set(record.personId, await acquireScheduleLock(db, record.personId))
+    return write()
 }
 
 /** local wrapper：避免与 shared.withScheduleLock 的导入循环依赖，行为与旧实现一致。 */

@@ -1,6 +1,6 @@
 /**
  * P3-B1/B2 写模块本地双跑：旧实现（mes-uniapp/common/mes-operations）vs native 实现（router/util/mes）。
- * 覆盖 catalogs/schedules（B1）、jobs/handovers/exceptions（B2）、attendance（B3）、claims/bind-personnel（B4）。
+ * 覆盖 catalogs/schedules（B1）、jobs/handovers/exceptions（B2）、attendance（B3）、claims/bind-personnel（B4）、排班导入（C1）。
  *
  * 用法：node tools/dualrun-mes-write.cjs
  * - 每个 case 建两份完全相同的内存 DB（fake DB），旧/新各跑一次；
@@ -40,6 +40,8 @@ const nativeAttendance = require(path.join(ROUTER, 'util/mes/attendance-write.js
 const nativeClaims = require(path.join(ROUTER, 'util/mes/claims-read.js'))
 const nativeClaimsWrite = require(path.join(ROUTER, 'util/mes/claims-write.js'))
 const nativeBind = require(path.join(ROUTER, 'util/mes/bind-personnel.js'))
+const nativeImport = require(path.join(ROUTER, 'util/mes/schedule-import.js'))
+const nativeImportWrite = require(path.join(ROUTER, 'util/mes/import-schedules.js'))
 const oldScope = require(path.join(UNIAPP, 'common/mes-operations/scope.js'))
 const oldCatalogs = require(path.join(UNIAPP, 'common/mes-operations/catalogs.js'))
 const oldSchedules = require(path.join(UNIAPP, 'common/mes-operations/schedules.js'))
@@ -48,6 +50,7 @@ const oldHandovers = require(path.join(UNIAPP, 'common/mes-operations/handovers.
 const oldAttendance = require(path.join(UNIAPP, 'common/mes-operations/attendance.js'))
 const oldClaims = require(path.join(UNIAPP, 'common/mes-operations/personnel-claims.js'))
 const oldBind = require(path.join(UNIAPP, 'common/mes-operations/bind-personnel.js'))
+const oldImport = require(path.join(UNIAPP, 'common/mes-operations/personnel-import.js'))
 
 // 旧模块可能访问全局 uniCloud；具体 DB 由调用参数决定，这里只兜底。
 global.uniCloud = global.uniCloud || { database: () => ({ command: {}, collection: () => ({}) }) }
@@ -108,6 +111,10 @@ const seedClaimSetup = db => { seedUser(db, 'u-new'); seedPerson(db, FREE, '自�
 
 
 const REST = over => ({ date: '2026-10-21', kind: 'rest', personId: IDS.otherPerson, absenceType: 'rest', ...over })
+/** P3-C1：导入目标日与排班种子（2026-11-30，无真实数据）。 */
+const C1DATE = '2026-11-30'
+const c1Row = (personId, over) => ({ date: C1DATE, shiftId: IDS.shift, processId: IDS.process, personId, kind: 'work', note: 'TEST-P3C1 双跑', ...over })
+const seedC1Schedule = (db, id, over) => db.ensure('mes_ops_schedules').set(id, { _id: id, date: C1DATE, personId: IDS.supPerson, personName: '于家园', workshopId: IDS.workshop, workshopName: '301', kind: 'work', shiftId: IDS.shift, shiftName: '早班（8小时）', processId: IDS.process, processName: '罐装机', startTime: '08:00', endTime: '16:00', startDayOffset: 0, endDayOffset: 0, plannedHours: 8, enabled: true, version: 1, ...over })
 
 const CASES = [
     { name: 'catalog 新建车间', setup: () => ({}), run: async (db, impl) => run(impl.catalog, db, (await impl.admin(db)), { type: 'workshops', expectedVersion: 0, record: { code: 'W1', name: '测试车间' } }) },
@@ -180,6 +187,22 @@ const CASES = [
     { name: 'bind 幂等二次 bound=0', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => { await impl.bindPersonnelAccounts(db, (await impl.admin(db)), {}); return run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), {}) } },
     { name: 'bind 历史 audit:null 行可绑定', setup: db => { seedEmployee(db, 'emp:1', '庚', 'u-7'); seedPerson(db, 'ops:personnel:YG-G', '庚', { audit: null, version: 5 }) }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), {}) },
     { name: 'bind 非管理员 403', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.operator(db)), {}) },
+    // ---- P3-C1：排班导入三件套 + 批量导入写 ----
+    { name: 'C1 scope 人员分页', run: async (db, impl) => run(impl.scheduleImportScope, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, scopeType: 'personnel', paged: true }) },
+    { name: 'C1 scope 目标日旧排班分页', setup: db => seedC1Schedule(db, 'schedule:c1-old'), run: async (db, impl) => run(impl.scheduleImportScope, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, date: C1DATE, paged: true }) },
+    { name: 'C1 scope 旧规则 409', run: async (db, impl) => run(impl.scheduleImportScope, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 2, date: C1DATE, paged: true }) },
+    { name: 'C1 prepare 自动建档 + 版本 0', run: async (db, impl) => run(impl.prepareScheduleImport, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson), { date: C1DATE, shiftId: IDS.shift, processId: IDS.process, personName: 'TEST-P3C1-新', kind: 'work', note: 'C1 双跑新人员' }] }) },
+    { name: 'C1 prepare 二次幂等（不再建档）', run: async (db, impl) => { const payload = { workshopId: IDS.workshop, importRuleVersion: 3, rows: [{ date: C1DATE, shiftId: IDS.shift, processId: IDS.process, personName: 'TEST-P3C1-新', kind: 'work' }] }; await impl.prepareScheduleImport(db, (await impl.admin(db)), payload); return run(impl.prepareScheduleImport, db, (await impl.admin(db)), payload) } },
+    { name: 'C1 prepare 同名多义 409', setup: db => { seedPerson(db, 'ops:personnel:C1D1', '同名'); seedPerson(db, 'ops:personnel:C1D2', '同名') }, run: async (db, impl) => run(impl.prepareScheduleImport, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [{ date: C1DATE, shiftId: IDS.shift, processId: IDS.process, personName: '同名', kind: 'work' }] }) },
+    { name: 'C1 prepare 停用人员 400', setup: db => seedPerson(db, 'ops:personnel:C1OFF', '停用', { enabled: false }), run: async (db, impl) => run(impl.prepareScheduleImport, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row('ops:personnel:C1OFF')] }) },
+    { name: 'C1 import 写入 3 人 + 考勤同步', run: async (db, impl) => { const prepared = await impl.prepareScheduleImport(db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson), c1Row(IDS.otherPerson), c1Row(IDS.operatorPerson)] }); return run(impl.importSchedules, db, (await impl.admin(db)), { rows: prepared.rows, requestId: 'dualrun-c1-import1', sessionId: 'dualrun-c1-session1' }) } },
+    { name: 'C1 import 同 requestId 幂等重放', run: async (db, impl) => { const prepared = await impl.prepareScheduleImport(db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson), c1Row(IDS.otherPerson)] }); const payload = { rows: prepared.rows, requestId: 'dualrun-c1-import2', sessionId: 'dualrun-c1-session2' }; await impl.importSchedules(db, (await impl.admin(db)), payload); return run(impl.importSchedules, db, (await impl.admin(db)), payload) } },
+    { name: 'C1 import 改内容重放 409 签名', run: async (db, impl) => { const prepared = await impl.prepareScheduleImport(db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson), c1Row(IDS.otherPerson)] }); const payload = { rows: prepared.rows, requestId: 'dualrun-c1-import3', sessionId: 'dualrun-c1-session3' }; await impl.importSchedules(db, (await impl.admin(db)), payload); return run(impl.importSchedules, db, (await impl.admin(db)), { rows: [prepared.rows[0], { ...prepared.rows[1], note: 'C1 改了内容' }], requestId: 'dualrun-c1-import3', sessionId: 'dualrun-c1-session3' }) } },
+    { name: 'C1 import 行级失败不隐藏部分成功', run: async (db, impl) => { const prepared = await impl.prepareScheduleImport(db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson), c1Row(IDS.supPerson, { note: 'C1 重复行' })] }); return run(impl.importSchedules, db, (await impl.admin(db)), { rows: prepared.rows, requestId: 'dualrun-c1-import4', sessionId: 'dualrun-c1-session4' }) } },
+    { name: 'C1 import replacePrevious 非管理员 403', run: async (db, impl) => run(impl.importSchedules, db, (await impl.sup(db)), { rows: [c1Row(IDS.supPerson)], requestId: 'dualrun-c1-import5', sessionId: 'dualrun-c1-session5', replacePrevious: [{ id: 'schedule:x', version: 1 }] }) },
+    { name: 'C1 finish paged 停用未再出现的旧排班', setup: db => seedC1Schedule(db, 'schedule:c1-finish-old', { personId: IDS.receiverPerson, personName: '朱钊' }), run: async (db, impl) => { const prepared = await impl.prepareScheduleImport(db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, rows: [c1Row(IDS.supPerson)] }); await impl.importSchedules(db, (await impl.admin(db)), { rows: prepared.rows, requestId: 'dualrun-c1-finish1', sessionId: 'dualrun-c1-finsess1' }); return run(impl.finishScheduleImport, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, date: C1DATE, paged: true, sessionId: 'dualrun-c1-finsess1', previousRows: [{ id: 'schedule:c1-finish-old', version: 1 }] }) } },
+    { name: 'C1 finish paged session 不匹配 409', run: async (db, impl) => run(impl.finishScheduleImport, db, (await impl.admin(db)), { workshopId: IDS.workshop, importRuleVersion: 3, date: C1DATE, paged: true, sessionId: 'dualrun-c1-nosess', previousRows: [{ id: 'schedule:c1-finish-old', version: 1 }] }) },
+    { name: 'C1 finish legacy 分页 25 条 → 20 + 5', setup: db => { for (let index = 0; index < 25; index++) seedC1Schedule(db, 'schedule:c1-legacy-' + String(index).padStart(2, '0'), { personId: IDS.receiverPerson, personName: '朱钊' }); seedC1Schedule(db, 'schedule:c1-keep', { personId: IDS.supPerson, personName: '于家园' }) }, run: async (db, impl) => { const admin = await impl.admin(db); const previousRows = [...db.ensure('mes_ops_schedules').values()].filter(row => row._id !== 'schedule:c1-keep').map(row => ({ id: row._id, version: 1 })); const first = await impl.finishScheduleImport(db, admin, { workshopId: IDS.workshop, importRuleVersion: 3, date: C1DATE, keepIds: ['schedule:c1-keep'], previousRows }); const second = await impl.finishScheduleImport(db, admin, { workshopId: IDS.workshop, importRuleVersion: 3, date: C1DATE, keepIds: ['schedule:c1-keep'], previousRows, cursor: first.nextCursor }); return { first, second } } },
 ]
 
 async function runCase(item) {
@@ -192,6 +215,8 @@ async function runCase(item) {
         saveAttendance: oldAttendance.saveAttendance, resolveAttendanceConflict: oldAttendance.resolveAttendanceConflict, syncAttendance: oldAttendance.syncAttendance,
         claimCandidates: oldClaims.claimCandidates, requestPersonnelClaim: oldClaims.requestPersonnelClaim, myPersonnelClaim: oldClaims.myPersonnelClaim, reviewPersonnelClaim: oldClaims.reviewPersonnelClaim,
         bindPersonnelAccounts: oldBind.bindPersonnelAccounts,
+        scheduleImportScope: oldImport.scheduleImportScope, prepareScheduleImport: oldImport.prepareScheduleImport, finishScheduleImport: oldImport.finishScheduleImport,
+        importSchedules: oldSchedules.importSchedules,
         unbound: () => ({ uid: 'u-new', role: [] }),
         admin: db => oldScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => oldScope.profile(db, { uid: IDS.sup, role: [] }),
@@ -206,6 +231,8 @@ async function runCase(item) {
         saveAttendance: nativeAttendance.saveAttendance, resolveAttendanceConflict: nativeAttendance.resolveAttendanceConflict, syncAttendance: nativeAttendance.syncAttendance,
         claimCandidates: nativeClaims.claimCandidates, requestPersonnelClaim: nativeClaimsWrite.requestPersonnelClaim, myPersonnelClaim: nativeClaims.myPersonnelClaim, reviewPersonnelClaim: nativeClaimsWrite.reviewPersonnelClaim,
         bindPersonnelAccounts: nativeBind.bindPersonnelAccounts,
+        scheduleImportScope: nativeImport.scheduleImportScope, prepareScheduleImport: nativeImport.prepareScheduleImport, finishScheduleImport: nativeImport.finishScheduleImport,
+        importSchedules: nativeImportWrite.importSchedules,
         unbound: () => ({ uid: 'u-new', role: [] }),
         admin: db => nativeScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => nativeScope.profile(db, { uid: IDS.sup, role: [] }),

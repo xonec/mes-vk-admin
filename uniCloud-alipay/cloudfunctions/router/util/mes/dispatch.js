@@ -55,8 +55,13 @@ async function dispatch(event, options = {}) {
 
     // P2 批 3-4 的写操作已在 P3-B2 全部并入可切换写（不再有「固定 forward 写」白名单）。
     let mode
+    // P3-C1：导入写链路 native-only —— router 内调下游函数有约 10s 硬超时，forward 必然失败，
+    // 因此不读灰度开关、不给 forward 分支（mes-switch 也不暴露这些 key）。
+    const nativeOnly = routing.NATIVE_ONLY_ACTIONS.includes(action)
     const switchableWrite = routing.SWITCHABLE_WRITE_ACTIONS.includes(action)
-    if (switchableWrite) {
+    if (nativeOnly) {
+        mode = 'native'
+    } else if (switchableWrite) {
         // P3-B1/B2：可切换写 action 跟随灰度开关；先 forward（可回退旧实现）后 native。
         // forward 时按写处理，不传 readOnly。
         if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
@@ -93,4 +98,4 @@ async function dispatch(event, options = {}) {
     }
 }
 
-module.exports = { dispatch, payloadOf, AUTH_ONLY_ACTIONS }
+module.exports = { dispatch, payloadOf, AUTH_ONLY_ACTIONS, NATIVE_ONLY_ACTIONS: routing.NATIVE_ONLY_ACTIONS }

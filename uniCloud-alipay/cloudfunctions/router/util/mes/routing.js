@@ -35,6 +35,8 @@ const DEFAULT_ACTIONS = {
     claimCandidates: 'native',
     myPersonnelClaim: 'native',
     listPersonnelClaims: 'native',
+    // P3-C1：排班导入范围预览（管理员只读，分页游标）
+    scheduleImportScope: 'native',
 }
 
 /**
@@ -43,6 +45,7 @@ const DEFAULT_ACTIONS = {
  * - P3-B2：jobs / handovers / exceptions（createJob/jobCommand/saveHandover/handoverCommand/saveException/resolveException）
  * - P3-B3：attendance（saveAttendance/resolveAttendanceConflict/syncAttendance）
  * - P3-B4：claims（requestPersonnelClaim/reviewPersonnelClaim/bindPersonnelAccounts）
+ * - P3-C1：schedule import prepare（prepareScheduleImport；importSchedules/finishScheduleImport 为 NATIVE_ONLY）
  * 这也是 mes-switch 允许写入的 key 白名单（native-switch.js 直接校验本数组）。
  */
 const SWITCHABLE_WRITE_ACTIONS = [
@@ -51,7 +54,16 @@ const SWITCHABLE_WRITE_ACTIONS = [
     'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
     'saveAttendance', 'resolveAttendanceConflict', 'syncAttendance',
     'requestPersonnelClaim', 'reviewPersonnelClaim', 'bindPersonnelAccounts',
+    'prepareScheduleImport',
 ]
+
+/**
+ * native-only action（P3-C1 导入写链路）：
+ * router 内 `uniCloud.callFunction` 调下游函数有约 10000ms 硬超时，导入批量写/收尾必然超时，
+ * 因此这两个 action 永远 native：不读灰度开关、不进 forward 白名单、mes-switch 不暴露。
+ * 回退方式只有重传上一版 router（两个后台当前直调 production-operations，不依赖 router 的导入入口）。
+ */
+const NATIVE_ONLY_ACTIONS = ['importSchedules', 'finishScheduleImport']
 
 let cache = { at: 0, actions: null }
 
@@ -84,4 +96,4 @@ function clearCache() {
     cache = { at: 0, actions: null }
 }
 
-module.exports = { resolveMode, clearCache, DEFAULT_ACTIONS, SWITCHABLE_WRITE_ACTIONS, CONFIG_ID, CONFIG_COLLECTION }
+module.exports = { resolveMode, clearCache, DEFAULT_ACTIONS, SWITCHABLE_WRITE_ACTIONS, NATIVE_ONLY_ACTIONS, CONFIG_ID, CONFIG_COLLECTION }

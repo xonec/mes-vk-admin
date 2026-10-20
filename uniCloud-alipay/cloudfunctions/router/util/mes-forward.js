@@ -46,6 +46,8 @@ const READ_ACTIONS = [
   'claimCandidates',
   'myPersonnelClaim',
   'listPersonnelClaims',
+  // P3-C1：排班导入范围预览（管理员只读；导入写链路 native-only，不进本白名单）
+  'scheduleImportScope',
 ];
 
 /**

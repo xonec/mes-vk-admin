@@ -16,6 +16,8 @@ const { saveAttendance, resolveAttendanceConflict, syncAttendance } = require('.
 const claimsRead = require('./claims-read')
 const { requestPersonnelClaim, reviewPersonnelClaim } = require('./claims-write')
 const { bindPersonnelAccounts } = require('./bind-personnel')
+const { prepareScheduleImport, finishScheduleImport, scheduleImportScope } = require('./schedule-import')
+const { importSchedules } = require('./import-schedules')
 
 const handlers = {
     // 第 1 模块：scope/profile + bootstrap
@@ -61,6 +63,11 @@ const handlers = {
     requestPersonnelClaim: (db, auth, input) => requestPersonnelClaim(db, auth, input),
     reviewPersonnelClaim: (db, profile, input) => reviewPersonnelClaim(db, profile, input),
     bindPersonnelAccounts: (db, profile, input) => bindPersonnelAccounts(db, profile, input),
+    // P3-C1：排班导入三件套 + 批量导入写（importSchedules/finishScheduleImport 为 native-only）
+    scheduleImportScope: (db, profile, input) => scheduleImportScope(db, profile, input),
+    prepareScheduleImport: (db, profile, input) => prepareScheduleImport(db, profile, input),
+    importSchedules: (db, profile, input) => importSchedules(db, profile, input),
+    finishScheduleImport: (db, profile, input) => finishScheduleImport(db, profile, input),
 }
 
 module.exports = { handlers }

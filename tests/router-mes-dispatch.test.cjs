@@ -140,7 +140,7 @@ async function test(name, fn) {
     await test('未登记 action 在 native 分支明确报错，不影响已迁移 action', async () => {
         const db = seed(makeDb())
         routing.clearCache()
-        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'prepareScheduleImport', mode: 'native' })
+        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'unknownAction', mode: 'native' })
         assert.equal(result.code, 500)
         assert.match(result.message, /未登记/)
     })
@@ -158,8 +158,9 @@ async function test(name, fn) {
         assert.equal(result.errCode, 503)
     })
 
-    await test('可切换写常量：P3-B1/B2/B3/B4 共 14 个 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
-        assert.deepEqual([...routing.SWITCHABLE_WRITE_ACTIONS].sort(), ['bindPersonnelAccounts', 'createJob', 'handoverCommand', 'jobCommand', 'requestPersonnelClaim', 'resolveAttendanceConflict', 'resolveException', 'reviewPersonnelClaim', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance'])
+    await test('可切换写常量：P3-B1/B2/B3/B4/C1 共 15 个 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
+        assert.deepEqual([...routing.SWITCHABLE_WRITE_ACTIONS].sort(), ['bindPersonnelAccounts', 'createJob', 'handoverCommand', 'jobCommand', 'prepareScheduleImport', 'requestPersonnelClaim', 'resolveAttendanceConflict', 'resolveException', 'reviewPersonnelClaim', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance'])
+        assert.deepEqual([...routing.NATIVE_ONLY_ACTIONS].sort(), ['finishScheduleImport', 'importSchedules'])
         assert.equal(FUNCTIONS.operations, 'production-operations')
         assert.equal(FUNCTIONS.orders, 'production-orders')
         assert.equal(FUNCTIONS.ocr, 'doc-ocr')
@@ -196,9 +197,23 @@ async function test(name, fn) {
     await test('非白名单写 action：仍返回 403「P0 适配层只开放只读操作」', async () => {
         const db = seed(makeDb())
         routing.clearCache()
-        const result = await dispatch({ data: { period: '2026-06' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'prepareScheduleImport', readOnly: true, forward })
+        const result = await dispatch({ data: { period: '2026-06' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'deleteSchedule', readOnly: true, forward })
         assert.equal(result.code, 403)
         assert.match(result.msg || result.message, /P0 适配层只开放只读操作/)
+    })
+
+    await test('native-only action：不读灰度开关、永远 native；缺 token 401', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        // 开关显式 forward 也不影响 native-only
+        db.ensure('vk-global-data').set(routing.CONFIG_ID, { _id: routing.CONFIG_ID, actions: { importSchedules: 'forward', finishScheduleImport: 'forward' } })
+        let forwarded = false
+        const unauthorized = await dispatch({ data: {}, util: { db, uniID: makeUniID() } }, { action: 'importSchedules', forward: async () => { forwarded = true; return { code: 0 } } })
+        assert.equal(unauthorized.code, 401)
+        assert.equal(unauthorized.message, '未登录')
+        const banned = await dispatch({ data: { requestId: 'x-1', rows: [] }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'importSchedules', forward: async () => { forwarded = true; return { code: 0 } } })
+        assert.equal(forwarded, false, 'native-only 不得 forward')
+        assert.notEqual(banned.code, 0)
     })
 
     await test('白名单写 action：forward 返回非 0 错误码/文案原样透传', async () => {
@@ -274,7 +289,7 @@ async function test(name, fn) {
         const util = { db: seed(makeDb()), uniID: makeUniID() }
         const missing = await operationEntry.main({ data: {}, uniIdToken: 'good', util })
         assert.equal(missing.code, 400)
-        const forbidden = await operationEntry.main({ data: { action: 'prepareScheduleImport' }, uniIdToken: 'good', util })
+        const forbidden = await operationEntry.main({ data: { action: 'deleteSchedule' }, uniIdToken: 'good', util })
         assert.equal(forbidden.code, 403)
         assert.match(forbidden.msg || forbidden.message, /只开放只读操作/)
         const unauthenticated = await operationEntry.main({ data: { action: 'jobCommand', id: 'job:1' }, util })
