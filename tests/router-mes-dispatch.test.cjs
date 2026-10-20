@@ -4,6 +4,8 @@ const { createMemoryDb } = require('./helpers/router-memory-db.cjs')
 const { dispatch, payloadOf } = require('../uniCloud-alipay/cloudfunctions/router/util/mes/dispatch.js')
 const common = require('../uniCloud-alipay/cloudfunctions/router/util/mes/common.js')
 const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routing.js')
+const { forward, WRITE_ACTIONS, FUNCTIONS } = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
+const operationEntry = require('../uniCloud-alipay/cloudfunctions/router/service/mes/pub/operation.js')
 
 function makeDb() {
     const db = createMemoryDb()
@@ -154,6 +156,130 @@ async function test(name, fn) {
         const db = seed(makeDb())
         const result = await common.checkAuth(db, 'good', null)
         assert.equal(result.errCode, 503)
+    })
+
+    await test('写白名单常量：首批 4 个写 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
+        assert.deepEqual([...WRITE_ACTIONS].sort(), ['handoverCommand', 'jobCommand', 'saveException', 'saveHandover'])
+        assert.equal(FUNCTIONS.operations, 'production-operations')
+        assert.equal(FUNCTIONS.orders, 'production-orders')
+        assert.equal(FUNCTIONS.ocr, 'doc-ocr')
+        assert.equal(FUNCTIONS.materials, 'product-materials')
+        assert.equal(FUNCTIONS.records, 'production-records')
+        assert.equal(FUNCTIONS.batches, 'batch-buckets')
+    })
+
+    await test('白名单写 action：有 token 固定 forward（readOnly=false）并原样透传结果', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        const calls = []
+        const result = await dispatch(
+            { data: { id: 'job:1', command: 'start', expectedVersion: 1 }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+            { action: 'jobCommand', forward: async (event, options) => { calls.push({ action: options.action, readOnly: options.readOnly }); return { code: 0, message: 'ok', data: { job: { _id: 'job:1', state: 'running' } } } } }
+        )
+        assert.equal(result.code, 0)
+        assert.equal(result.data.job.state, 'running')
+        assert.deepEqual(calls, [{ action: 'jobCommand', readOnly: false }])
+    })
+
+    await test('白名单写 action：缺 token 返回 401 未登录，不调用 forward', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        let called = false
+        for (const action of WRITE_ACTIONS) {
+            const result = await dispatch({ data: {}, util: { db, uniID: makeUniID() } }, { action, forward: async () => { called = true; return { code: 0 } } })
+            assert.equal(result.code, 401)
+            assert.equal(result.message, '未登录')
+        }
+        assert.equal(called, false)
+    })
+
+    await test('非白名单写 action：仍返回 403「P0 适配层只开放只读操作」', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        const result = await dispatch({ data: { period: '2026-06' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'saveAttendance', readOnly: true, forward })
+        assert.equal(result.code, 403)
+        assert.match(result.msg || result.message, /P0 适配层只开放只读操作/)
+    })
+
+    await test('白名单写 action：forward 返回非 0 错误码/文案原样透传', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        const upstream = { code: 409, message: '工单已被他人操作，请刷新后核对' }
+        const result = await dispatch(
+            { data: { id: 'job:1' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+            { action: 'jobCommand', forward: async () => upstream }
+        )
+        assert.deepEqual(result, upstream)
+    })
+
+    await test('灰度开关不能把白名单写 action 切成 native（固定 forward）', async () => {
+        const db = seed(makeDb())
+        db.ensure('vk-global-data').set('mes-native-switch', { _id: 'mes-native-switch', actions: { jobCommand: 'native', saveHandover: 'native' } })
+        routing.clearCache()
+        const calls = []
+        const result = await dispatch(
+            { data: { id: 'job:1' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+            { action: 'jobCommand', mode: 'native', forward: async (event, options) => { calls.push(options.action); return { code: 0, message: 'ok', data: { via: 'forward' } } } }
+        )
+        assert.deepEqual(calls, ['jobCommand'])
+        assert.equal(result.data.via, 'forward')
+        routing.clearCache()
+    })
+
+    await test('只读 action 行为未变：trace 仍 forward(readOnly=true)，bootstrap 仍 native', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        const seen = []
+        const traceResult = await dispatch(
+            { data: { batchNo: 'APDD26X1006' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+            { action: 'trace', readOnly: true, forward: async (event, options) => { seen.push(options.readOnly); return { code: 0, message: 'ok', data: { jobs: [] } } } }
+        )
+        assert.equal(traceResult.code, 0)
+        assert.deepEqual(seen, [true])
+        routing.clearCache()
+        const bootstrap = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'bootstrap' })
+        assert.equal(bootstrap.code, 0)
+        assert.equal(bootstrap.data.profile.name, '管理员')
+    })
+
+    await test('本地端到端转发（mock uniCloud）：白名单写 action 实际调用 production-operations 并透传', async () => {
+        const db = seed(makeDb())
+        routing.clearCache()
+        const captured = {}
+        const original = global.uniCloud
+        global.uniCloud = {
+            callFunction: async (options) => {
+                captured.name = options.name
+                captured.data = options.data
+                return { result: { code: 0, message: 'ok', data: { forwarded: true } } }
+            },
+        }
+        try {
+            const result = await dispatch(
+                { data: { id: 'job:1', command: 'start', expectedVersion: 2, uniIdToken: 'should-be-dropped' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } },
+                { action: 'jobCommand' }
+            )
+            assert.equal(captured.name, 'production-operations')
+            assert.equal(captured.data.action, 'jobCommand')
+            assert.equal(captured.data.id, 'job:1')
+            assert.equal(captured.data.expectedVersion, 2)
+            assert.equal(captured.data.uniIdToken, 'good', '使用顶层 uniIdToken，不把 data 内的同名字段带出去')
+            assert.deepEqual(result, { code: 0, message: 'ok', data: { forwarded: true } })
+        } finally {
+            global.uniCloud = original
+        }
+    })
+
+    await test('operation 入口：缺 action 400；非白名单写 403；白名单写缺 token 401', async () => {
+        const util = { db: seed(makeDb()), uniID: makeUniID() }
+        const missing = await operationEntry.main({ data: {}, uniIdToken: 'good', util })
+        assert.equal(missing.code, 400)
+        const forbidden = await operationEntry.main({ data: { action: 'saveAttendance' }, uniIdToken: 'good', util })
+        assert.equal(forbidden.code, 403)
+        assert.match(forbidden.msg || forbidden.message, /只开放只读操作/)
+        const unauthenticated = await operationEntry.main({ data: { action: 'jobCommand', id: 'job:1' }, util })
+        assert.equal(unauthenticated.code, 401)
+        assert.equal(unauthenticated.message, '未登录')
     })
 
     console.log('\nMES 原生化 dispatch：' + passed + ' passed, ' + failed + ' failed')

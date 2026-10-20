@@ -11,6 +11,7 @@ const { checkAuth, ok, fail, ClientError } = require('./common')
 const scope = require('./scope')
 const { handlers } = require('./handlers')
 const routing = require('./routing')
+const { WRITE_ACTIONS } = require('../mes-forward.js')
 
 const RESERVED = ['$url', 'uniIdToken', 'uni_id_token', 'vk', 'context', 'action']
 
@@ -29,13 +30,28 @@ function forwardByDefault(event, options) {
 
 /**
  * @param {Object} event vk router 事件（含 data、uniIdToken、util）
- * @param {Object} options { action, mode?: 'native'|'forward', forward?: Function }（mode/forward 仅测试用）
+ * @param {Object} options { target?, action, mode?: 'native'|'forward', forward?: Function }（mode/forward 仅测试用）
  */
 async function dispatch(event, options = {}) {
     const action = options.action
+    const target = options.target || 'operations'
+
+    // P2 批 5：多目标函数（orders/ocr/materials）只做「登录 + 精确白名单 + 转发」，
+    // 不读灰度开关、不做 native；权限与业务校验仍由旧云函数负责。
+    if (target !== 'operations') {
+        if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
+        return (options.forward || forwardByDefault)(event, { target, action, readOnly: false })
+    }
+
     const util = (event && event.util) || {}
     const { db, uniID } = util
     if (!db) return fail(500, 'MES 服务未就绪，请稍后重试')
+
+    // P2 批 3-4：白名单写操作固定 forward（旧实现做权限/scope/冲突校验），不参与灰度开关。
+    if (WRITE_ACTIONS.includes(action)) {
+        if (!event || typeof event.uniIdToken !== 'string' || !event.uniIdToken) return fail(401, '未登录')
+        return (options.forward || forwardByDefault)(event, { action, readOnly: false })
+    }
 
     let mode
     try {
