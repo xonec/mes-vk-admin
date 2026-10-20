@@ -133,8 +133,8 @@ const CASES = [
 
 /** 明确不开放、必须 403 且不转发的 action。 */
 const EXCLUDED = {
-    orders: ['list', 'upsert', 'setEnabled', 'saveCustomer', 'savePlan', 'getByBatch', 'trace', 'sourceDetail', 'commitSourceImages'],
-    ocr: ['getConfig', 'setConfig', 'getModels', 'testModel', 'getMyKey', 'setMyKey', 'clearMyKey', 'save', 'recognize'],
+    orders: ['list', 'upsert', 'setEnabled', 'saveCustomer', 'savePlan', 'trace', 'sourceDetail', 'commitSourceImages'],
+    ocr: ['save', 'recognize'],
     materials: ['adminList', 'setEnabled', 'listVersions'],
 }
 
@@ -157,7 +157,7 @@ async function test(name, fn) {
 
     // ---------- 常量与白名单 ----------
     await test('TARGETS 三个 target 指向正确云函数', () => {
-        assert.deepEqual(Object.keys(TARGETS).sort(), ['materials', 'ocr', 'operations', 'orders'])
+        assert.deepEqual(Object.keys(TARGETS).sort(), ['bom', 'buckets', 'materials', 'ocr', 'operations', 'orders', 'records'])
         assert.equal(TARGETS.orders.name, 'production-orders')
         assert.equal(TARGETS.ocr.name, 'doc-ocr')
         assert.equal(TARGETS.materials.name, 'product-materials')
@@ -165,10 +165,10 @@ async function test(name, fn) {
         for (const key of ['operations', 'orders', 'ocr', 'materials']) assert.equal(TARGETS[key].name, FUNCTIONS[key])
     })
 
-    await test('13 个开放 action 落在正确名单且读写不重叠', () => {
+    await test('21 个开放 action 落在正确名单且读写不重叠（批 5 三 target + 批 6 getByBatch + 批 7 OCR 配置）', () => {
         const expected = {
-            read: { orders: ['get', 'listCustomers', 'listPlans', 'getPlanVersion'], ocr: ['getCapabilities', 'checkRecognition'], materials: ['get', 'list'] },
-            write: { orders: ['save', 'prepareSourceImages', 'cleanupSourceUploads'], ocr: ['cleanupOriginals'], materials: ['upsert'] },
+            read: { orders: ['get', 'listCustomers', 'listPlans', 'getPlanVersion', 'getByBatch'], ocr: ['getCapabilities', 'checkRecognition', 'getConfig', 'getModels', 'getMyKey'], materials: ['get', 'list'] },
+            write: { orders: ['save', 'prepareSourceImages', 'cleanupSourceUploads'], ocr: ['cleanupOriginals', 'setConfig', 'testModel', 'setMyKey', 'clearMyKey'], materials: ['upsert'] },
         }
         for (const target of ['orders', 'ocr', 'materials']) {
             assert.deepEqual([...TARGETS[target].read].sort(), [...expected.read[target]].sort(), target + ' read')
@@ -176,7 +176,7 @@ async function test(name, fn) {
             assert.deepEqual(TARGETS[target].read.filter(action => TARGETS[target].write.includes(action)), [], target + ' 读写不应重叠')
             assert.equal(new Set([...TARGETS[target].read, ...TARGETS[target].write]).size, TARGETS[target].read.length + TARGETS[target].write.length)
         }
-        assert.equal(TARGETS.orders.read.length + TARGETS.orders.write.length + TARGETS.ocr.read.length + TARGETS.ocr.write.length + TARGETS.materials.read.length + TARGETS.materials.write.length, 13)
+        assert.equal(TARGETS.orders.read.length + TARGETS.orders.write.length + TARGETS.ocr.read.length + TARGETS.ocr.write.length + TARGETS.materials.read.length + TARGETS.materials.write.length, 21)
     })
 
     await test('排除清单 action 不在任何 target 名单', () => {

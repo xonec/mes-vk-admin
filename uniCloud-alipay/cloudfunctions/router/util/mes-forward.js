@@ -16,6 +16,7 @@ const FUNCTIONS = {
   ocr: 'doc-ocr',
   materials: 'product-materials',
   records: 'production-records',
+  bom: 'product-bom',
   batches: 'batch-buckets',
 };
 
@@ -78,20 +79,43 @@ const TARGETS = {
   orders: {
     name: FUNCTIONS.orders,
     // 指令单页面：订单读取 + 客户/包装方案选择器（只读档案查询，旧端页面依赖）
-    read: ['get', 'listCustomers', 'listPlans', 'getPlanVersion'],
+    read: ['get', 'listCustomers', 'listPlans', 'getPlanVersion', 'getByBatch'],
     // commitSourceImages 是长耗时 action（客户端 210s），按例外方案 A 由页面直调旧云函数
     write: ['save', 'prepareSourceImages', 'cleanupSourceUploads'],
   },
   ocr: {
     name: FUNCTIONS.ocr,
-    read: ['getCapabilities', 'checkRecognition'], // checkRecognition 有租约/source 轻量写副作用，无 OCR 花费
-    // recognize 是长耗时 action（服务端 180s 窗口），按例外方案 A 由页面直调旧云函数
-    write: ['cleanupOriginals'],
+    // 批 5 指令单流程：checkRecognition 有租约/source 轻量写副作用、无 OCR 花费
+    // 批 7 设置页：getConfig/getModels 为管理员只读；getMyKey 为登录用户读本人 Key 状态
+    read: ['getCapabilities', 'checkRecognition', 'getConfig', 'getModels', 'getMyKey'],
+    // recognize 是长耗时 action（服务端 180s 窗口），按例外方案 A 由页面直调旧云函数，不在白名单
+    // setConfig/testModel 为管理员动作（含外部模型请求/明文 Key 上行）；setMyKey/clearMyKey 只作用于本人 uid；
+    // doc-ocr.save 不开放（与 orders.save 重叠）。以上权限均由旧实现负责，router 只透传、不落 payload/不注入 uid。
+    write: ['cleanupOriginals', 'setConfig', 'testModel', 'setMyKey', 'clearMyKey'],
   },
   materials: {
     name: FUNCTIONS.materials,
     // 指令单 purpose=bom 读档案、createProductArchive/observeExisting 只读查询
     read: ['get', 'list'],
+    write: ['upsert'],
+  },
+  // P2 批 6：生产记录 / 产品 BOM / 批号分桶
+  records: {
+    name: FUNCTIONS.records,
+    // getVersion/rollback 不开放（rollback 属高风险覆盖写，getVersion 按批 6 清单排除）
+    read: ['get', 'list', 'listVersions', 'getDraft'],
+    write: ['upsert', 'saveDraft'], // 生产记录保存（高风险主数据）/ 本人本设备草稿
+  },
+  bom: {
+    name: FUNCTIONS.bom,
+    // 写操作（upsert/setEnabled/listVersions）批 6 不开放
+    read: ['list'],
+    write: [],
+  },
+  buckets: {
+    name: FUNCTIONS.batches,
+    // upsert 为帆软同步链路的整批覆盖写（无版本/审计），按批 6 清单开放但单独评审风险
+    read: ['get'],
     write: ['upsert'],
   },
 };
