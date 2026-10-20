@@ -8,19 +8,6 @@
     "passwordErrorRetryTime": 3600,
     "autoSetInviteCode": false,
     "forceInviteCode": false,
-    "app": {
-        "tokenExpiresIn": 2592000,
-        "tokenExpiresThreshold": 864000,
-        "oauth": {
-            "weixin": {
-                "appid": "填写来源微信开放平台https://open.weixin.qq.com/创建的应用的appid",
-                "appsecret": "填写来源微信开放平台https://open.weixin.qq.com/创建的应用的appsecret"
-            },
-            "apple": {
-                "bundleId": "苹果开发者后台获取的bundleId"
-            }
-        }
-    },
     "web": {
         "tokenExpiresIn": 7200,
         "tokenExpiresThreshold": 3600,
