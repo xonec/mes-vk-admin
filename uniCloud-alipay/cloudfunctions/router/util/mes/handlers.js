@@ -13,6 +13,9 @@ const { saveSchedule } = require('./schedules-write')
 const { createJob, jobCommand } = require('./jobs-write')
 const { saveHandover, handoverCommand, saveException, resolveException } = require('./handovers-write')
 const { saveAttendance, resolveAttendanceConflict, syncAttendance } = require('./attendance-write')
+const claimsRead = require('./claims-read')
+const { requestPersonnelClaim, reviewPersonnelClaim } = require('./claims-write')
+const { bindPersonnelAccounts } = require('./bind-personnel')
 
 const handlers = {
     // 第 1 模块：scope/profile + bootstrap
@@ -51,6 +54,13 @@ const handlers = {
     saveAttendance: (db, profile, input) => saveAttendance(db, profile, input),
     resolveAttendanceConflict: (db, profile, input) => resolveAttendanceConflict(db, profile, input),
     syncAttendance: (db, profile, input) => syncAttendance(db, profile, input),
+    // P3-B4：人员认领 / 账号绑定（读 3 + 写 3；claimCandidates/requestPersonnelClaim/myPersonnelClaim 走 auth-only）
+    claimCandidates: (db, auth, input) => claimsRead.claimCandidates(db, auth, input),
+    myPersonnelClaim: (db, auth) => claimsRead.myPersonnelClaim(db, auth),
+    listPersonnelClaims: (db, profile, input) => claimsRead.listPersonnelClaims(db, profile, input),
+    requestPersonnelClaim: (db, auth, input) => requestPersonnelClaim(db, auth, input),
+    reviewPersonnelClaim: (db, profile, input) => reviewPersonnelClaim(db, profile, input),
+    bindPersonnelAccounts: (db, profile, input) => bindPersonnelAccounts(db, profile, input),
 }
 
 module.exports = { handlers }

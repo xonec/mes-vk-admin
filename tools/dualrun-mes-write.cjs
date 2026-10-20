@@ -1,6 +1,6 @@
 /**
  * P3-B1/B2 写模块本地双跑：旧实现（mes-uniapp/common/mes-operations）vs native 实现（router/util/mes）。
- * 覆盖 catalogs/schedules（B1）、jobs/handovers/exceptions（B2）、attendance（B3）。
+ * 覆盖 catalogs/schedules（B1）、jobs/handovers/exceptions（B2）、attendance（B3）、claims/bind-personnel（B4）。
  *
  * 用法：node tools/dualrun-mes-write.cjs
  * - 每个 case 建两份完全相同的内存 DB（fake DB），旧/新各跑一次；
@@ -37,12 +37,17 @@ const nativeSchedules = require(path.join(ROUTER, 'util/mes/schedules-write.js')
 const nativeJobs = require(path.join(ROUTER, 'util/mes/jobs-write.js'))
 const nativeHandovers = require(path.join(ROUTER, 'util/mes/handovers-write.js'))
 const nativeAttendance = require(path.join(ROUTER, 'util/mes/attendance-write.js'))
+const nativeClaims = require(path.join(ROUTER, 'util/mes/claims-read.js'))
+const nativeClaimsWrite = require(path.join(ROUTER, 'util/mes/claims-write.js'))
+const nativeBind = require(path.join(ROUTER, 'util/mes/bind-personnel.js'))
 const oldScope = require(path.join(UNIAPP, 'common/mes-operations/scope.js'))
 const oldCatalogs = require(path.join(UNIAPP, 'common/mes-operations/catalogs.js'))
 const oldSchedules = require(path.join(UNIAPP, 'common/mes-operations/schedules.js'))
 const oldJobs = require(path.join(UNIAPP, 'common/mes-operations/jobs.js'))
 const oldHandovers = require(path.join(UNIAPP, 'common/mes-operations/handovers.js'))
 const oldAttendance = require(path.join(UNIAPP, 'common/mes-operations/attendance.js'))
+const oldClaims = require(path.join(UNIAPP, 'common/mes-operations/personnel-claims.js'))
+const oldBind = require(path.join(UNIAPP, 'common/mes-operations/bind-personnel.js'))
 
 // 旧模块可能访问全局 uniCloud；具体 DB 由调用参数决定，这里只兜底。
 global.uniCloud = global.uniCloud || { database: () => ({ command: {}, collection: () => ({}) }) }
@@ -93,6 +98,14 @@ const ATT = over => ({ personId: IDS.supPerson, personName: '于家园', worksho
 const ATT_WORK = over => ({ date: '2026-10-22', kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3', ...over })
 const seedAtt = (db, id, over) => db.ensure('mes_ops_attendance').set(id, { _id: id, ...ATT(over) })
 const seedScheduleDoc = (db, id, over) => db.ensure('mes_ops_schedules').set(id, { _id: id, personId: IDS.supPerson, personName: '于家园', workshopId: IDS.workshop, workshopName: '301', date: '2026-10-22', kind: 'work', shiftId: IDS.shift, shiftName: '早班（8小时）', processId: IDS.process, processName: '罐装机', startTime: '08:00', endTime: '16:00', startDayOffset: 0, endDayOffset: 0, plannedHours: 8, enabled: true, version: 1, ...over })
+/** P3-B4：认领/绑定种子。 */
+const FREE = 'ops:personnel:YG-FREE'
+const FREE2 = 'ops:personnel:YG-FREE2'
+const seedUser = (db, uid) => db.ensure('uni-id-users').set(uid, { _id: uid, status: 0, role: [], nickname: uid })
+const seedEmployee = (db, id, name, uid) => db.ensure('mes_employee_accounts').set(id, { _id: id, state: 'ready', name, uid, employeeNo: id })
+const seedPerson = (db, id, name, over) => db.ensure('mes_ops_personnel').set(id, { _id: id, code: id.split(':').pop(), name, workshopId: IDS.workshop, workshopName: '301', processIds: [], processNames: [], scopeRole: 'operator', enabled: true, uid: '', version: 1, ...over })
+const seedClaimSetup = db => { seedUser(db, 'u-new'); seedPerson(db, FREE, '自由人甲'); seedPerson(db, FREE2, '自由人乙') }
+
 
 const REST = over => ({ date: '2026-10-21', kind: 'rest', personId: IDS.otherPerson, absenceType: 'rest', ...over })
 
@@ -148,6 +161,25 @@ const CASES = [
     { name: 'attendance sync 分页（22 组 → 20+2）', setup: db => { for (let day = 1; day <= 22; day++) seedScheduleDoc(db, 'schedule:sync:page:' + day, { date: '2026-10-' + String(day).padStart(2, '0') }) }, run: async (db, impl) => { const first = await impl.syncAttendance(db, (await impl.admin(db)), { periodType: 'month', period: '2026-10', personId: IDS.supPerson }); const second = await impl.syncAttendance(db, (await impl.admin(db)), { periodType: 'month', period: '2026-10', personId: IDS.supPerson, cursor: first.nextCursor }); return { first, second } } },
     { name: 'attendance sync 非管理员 403', run: async (db, impl) => run(impl.syncAttendance, db, (await impl.sup(db)), { periodType: 'month', period: '2026-10' }) },
     { name: '冲突链路：manual→saveSchedule 早班→员工改考勤→改夜班→resolve retained', run: async (db, impl) => { const manual = await impl.saveAttendance(db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-att-chain-0001', record: ATT_WORK() }); const schedule = await impl.schedule(db, (await impl.admin(db)), { expectedVersion: 0, record: { date: '2026-10-22', shiftId: IDS.shift, processId: IDS.process, personId: IDS.supPerson, kind: 'work', batchNos: [] } }); const synced = [...db.ensure('mes_ops_attendance').values()].find(row => row.source === 'schedule'); const edited = await impl.saveAttendance(db, (await impl.sup(db)), { expectedVersion: synced.version, requestId: 'dualrun-att-chain-0002', record: { _id: synced._id, date: synced.date, kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3 员工修改' } }); const changed = await impl.schedule(db, (await impl.admin(db)), { expectedVersion: 1, record: { _id: schedule._id, date: '2026-10-22', shiftId: IDS.shiftNight, processId: IDS.process, personId: IDS.supPerson, kind: 'work', batchNos: [], changeReason: 'TEST-P3B3 改班制造冲突' } }); const conflicted = [...db.ensure('mes_ops_attendance').values()].find(row => row.conflict); const resolved = await impl.resolveAttendanceConflict(db, (await impl.sup(db)), { id: conflicted._id, expectedVersion: conflicted.version, requestId: 'dualrun-att-chain-0003', choice: 'retained' }); return { manual: manual.version, schedule: schedule.version, edited: edited.version, changed: changed.version, resolved: resolved.version, conflictAfter: resolved.conflict } } },
+    // ---- P3-B4：人员认领 / 账号绑定 ----
+    { name: 'claims claimCandidates（未绑定账号关键字查询）', setup: db => seedClaimSetup(db), run: async (db, impl) => run(impl.claimCandidates, db, impl.unbound(), { keyword: '自由人' }) },
+    { name: 'claims request 成功（pending v1）', setup: db => seedClaimSetup(db), run: async (db, impl) => run(impl.requestPersonnelClaim, db, impl.unbound(), { personId: FREE }) },
+    { name: 'claims request 同人幂等', setup: db => seedClaimSetup(db), run: async (db, impl) => { await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.requestPersonnelClaim, db, impl.unbound(), { personId: FREE }) } },
+    { name: 'claims request 换人 409', setup: db => seedClaimSetup(db), run: async (db, impl) => { await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.requestPersonnelClaim, db, impl.unbound(), { personId: FREE2 }) } },
+    { name: 'claims request 档案已绑 409', setup: db => { seedUser(db, 'u-new'); seedPerson(db, FREE, '自由人甲', { uid: 'u-other' }) }, run: async (db, impl) => run(impl.requestPersonnelClaim, db, impl.unbound(), { personId: FREE }) },
+    { name: 'claims request 账号已绑 409', setup: db => seedClaimSetup(db), run: async (db, impl) => run(impl.requestPersonnelClaim, db, { uid: IDS.sup, role: [] }, { personId: FREE }) },
+    { name: 'claims review approve（人员 uid 绑定+审计）', setup: db => seedClaimSetup(db), run: async (db, impl) => { const claim = await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.reviewPersonnelClaim, db, (await impl.admin(db)), { id: claim._id, decision: 'approved', expectedVersion: 1 }) } },
+    { name: 'claims review reject 无原因 400', setup: db => seedClaimSetup(db), run: async (db, impl) => { const claim = await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.reviewPersonnelClaim, db, (await impl.admin(db)), { id: claim._id, decision: 'rejected', expectedVersion: 1 }) } },
+    { name: 'claims review reject 成功', setup: db => seedClaimSetup(db), run: async (db, impl) => { const claim = await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.reviewPersonnelClaim, db, (await impl.admin(db)), { id: claim._id, decision: 'rejected', expectedVersion: 1, reason: '档案信息不符' }) } },
+    { name: 'claims review 版本冲突 409', setup: db => seedClaimSetup(db), run: async (db, impl) => { const claim = await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.reviewPersonnelClaim, db, (await impl.admin(db)), { id: claim._id, decision: 'approved', expectedVersion: 99 }) } },
+    { name: 'claims review 非管理员 403', setup: db => seedClaimSetup(db), run: async (db, impl) => { const claim = await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.reviewPersonnelClaim, db, (await impl.operator(db)), { id: claim._id, decision: 'approved', expectedVersion: 1 }) } },
+    { name: 'claims myPersonnelClaim 返回本人申请', setup: db => seedClaimSetup(db), run: async (db, impl) => { await impl.requestPersonnelClaim(db, impl.unbound(), { personId: FREE }); return run(impl.myPersonnelClaim, db, impl.unbound()) } },
+    { name: 'bind dryRun 不写库', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), { dryRun: true }) },
+    { name: 'bind 真实绑定（uid/版本/审计/归档）', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), {}) },
+    { name: 'bind 同名多义跳过', setup: db => { seedEmployee(db, 'emp:1', '乙', 'u-1'); seedEmployee(db, 'emp:2', '乙', 'u-2'); seedPerson(db, 'ops:personnel:YG-B', '乙') }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), { dryRun: true }) },
+    { name: 'bind 幂等二次 bound=0', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => { await impl.bindPersonnelAccounts(db, (await impl.admin(db)), {}); return run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), {}) } },
+    { name: 'bind 历史 audit:null 行可绑定', setup: db => { seedEmployee(db, 'emp:1', '庚', 'u-7'); seedPerson(db, 'ops:personnel:YG-G', '庚', { audit: null, version: 5 }) }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.admin(db)), {}) },
+    { name: 'bind 非管理员 403', setup: db => { seedEmployee(db, 'emp:1', '甲', 'u-1'); seedPerson(db, 'ops:personnel:YG-A', '甲') }, run: async (db, impl) => run(impl.bindPersonnelAccounts, db, (await impl.operator(db)), {}) },
 ]
 
 async function runCase(item) {
@@ -158,6 +190,9 @@ async function runCase(item) {
         saveHandover: oldHandovers.saveHandover, handoverCommand: oldHandovers.handoverCommand,
         saveException: oldHandovers.saveException, resolveException: oldHandovers.resolveException,
         saveAttendance: oldAttendance.saveAttendance, resolveAttendanceConflict: oldAttendance.resolveAttendanceConflict, syncAttendance: oldAttendance.syncAttendance,
+        claimCandidates: oldClaims.claimCandidates, requestPersonnelClaim: oldClaims.requestPersonnelClaim, myPersonnelClaim: oldClaims.myPersonnelClaim, reviewPersonnelClaim: oldClaims.reviewPersonnelClaim,
+        bindPersonnelAccounts: oldBind.bindPersonnelAccounts,
+        unbound: () => ({ uid: 'u-new', role: [] }),
         admin: db => oldScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => oldScope.profile(db, { uid: IDS.sup, role: [] }),
         operator: db => oldScope.profile(db, { uid: IDS.operator, role: [] }),
@@ -169,14 +204,23 @@ async function runCase(item) {
         saveHandover: nativeHandovers.saveHandover, handoverCommand: nativeHandovers.handoverCommand,
         saveException: nativeHandovers.saveException, resolveException: nativeHandovers.resolveException,
         saveAttendance: nativeAttendance.saveAttendance, resolveAttendanceConflict: nativeAttendance.resolveAttendanceConflict, syncAttendance: nativeAttendance.syncAttendance,
+        claimCandidates: nativeClaims.claimCandidates, requestPersonnelClaim: nativeClaimsWrite.requestPersonnelClaim, myPersonnelClaim: nativeClaims.myPersonnelClaim, reviewPersonnelClaim: nativeClaimsWrite.reviewPersonnelClaim,
+        bindPersonnelAccounts: nativeBind.bindPersonnelAccounts,
+        unbound: () => ({ uid: 'u-new', role: [] }),
         admin: db => nativeScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => nativeScope.profile(db, { uid: IDS.sup, role: [] }),
         operator: db => nativeScope.profile(db, { uid: IDS.operator, role: [] }),
         receiver: db => nativeScope.profile(db, { uid: IDS.receiver, role: [] }),
     }
     if (item.setup) { item.setup(left.db); item.setup(right.db) }
-    const oldResult = await item.run(left.db, oldImpl)
-    const newResult = await item.run(right.db, newImpl)
+    // 冻结时钟：旧/新两侧运行时间不同会让含时间戳的签名（如 createJob 的 digest(record)）产生假差异。
+    const realNow = Date.now
+    Date.now = () => 1792516000000
+    let oldResult, newResult
+    try {
+        oldResult = await item.run(left.db, oldImpl)
+        newResult = await item.run(right.db, newImpl)
+    } finally { Date.now = realNow }
     const resultDiff = diff(oldResult, newResult)
     const dbDiff = diff(dump(left.db), dump(right.db))
     return { name: item.name, resultDiff, dbDiff }

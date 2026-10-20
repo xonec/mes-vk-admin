@@ -8,7 +8,7 @@ const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routi
 const forwardModule = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
 
 const { SWITCHABLE_WRITE_ACTIONS, READ_ACTIONS } = { SWITCHABLE_WRITE_ACTIONS: routing.SWITCHABLE_WRITE_ACTIONS, READ_ACTIONS: forwardModule.READ_ACTIONS }
-const EXPECTED = ['createJob', 'handoverCommand', 'jobCommand', 'resolveAttendanceConflict', 'resolveException', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance']
+const EXPECTED = ['bindPersonnelAccounts', 'createJob', 'handoverCommand', 'jobCommand', 'requestPersonnelClaim', 'resolveAttendanceConflict', 'resolveException', 'reviewPersonnelClaim', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance']
 
 function makeUniID(uid) {
     return { checkToken: async (token) => (token === 'tok-' + uid ? { code: 0, uid } : { code: 30204 }) }
@@ -40,7 +40,7 @@ async function test(name, fn) {
 }
 
 ;(async () => {
-    console.log('\nP3 可切换写灰度（P3-B1/B2/B3 共 11 项）')
+    console.log('\nP3 可切换写灰度（P3-B1/B2/B3/B4 共 14 项）')
 
     await test('常量：8 个可切换写 action，且不再导出固定 WRITE_ACTIONS、与只读白名单不重叠', () => {
         assert.deepEqual([...SWITCHABLE_WRITE_ACTIONS].sort(), EXPECTED)
@@ -133,7 +133,7 @@ async function test(name, fn) {
         assert.equal(db.ensure('mes_ops_handovers').size, 0)
     })
 
-    await test('11 个可切换写 action 缺 token 全部 401，且不 forward/不 native', async () => {
+    await test('14 个可切换写 action 缺 token 全部 401，且不 forward/不 native', async () => {
         const db = createMemoryDb()
         const { calls, forward } = captureForward({ code: 0 })
         routing.clearCache()

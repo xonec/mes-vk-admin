@@ -31,6 +31,10 @@ const DEFAULT_ACTIONS = {
     getHandover: 'native',
     listExceptions: 'native',
     audit: 'native',
+    // P3-B4：认领读（claimCandidates/myPersonnelClaim 为 auth-only，listPersonnelClaims 为管理员）
+    claimCandidates: 'native',
+    myPersonnelClaim: 'native',
+    listPersonnelClaims: 'native',
 }
 
 /**
@@ -38,6 +42,7 @@ const DEFAULT_ACTIONS = {
  * - P3-B1：catalogs / schedules（saveCatalog/saveSchedule）
  * - P3-B2：jobs / handovers / exceptions（createJob/jobCommand/saveHandover/handoverCommand/saveException/resolveException）
  * - P3-B3：attendance（saveAttendance/resolveAttendanceConflict/syncAttendance）
+ * - P3-B4：claims（requestPersonnelClaim/reviewPersonnelClaim/bindPersonnelAccounts）
  * 这也是 mes-switch 允许写入的 key 白名单（native-switch.js 直接校验本数组）。
  */
 const SWITCHABLE_WRITE_ACTIONS = [
@@ -45,6 +50,7 @@ const SWITCHABLE_WRITE_ACTIONS = [
     'createJob', 'jobCommand',
     'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
     'saveAttendance', 'resolveAttendanceConflict', 'syncAttendance',
+    'requestPersonnelClaim', 'reviewPersonnelClaim', 'bindPersonnelAccounts',
 ]
 
 let cache = { at: 0, actions: null }

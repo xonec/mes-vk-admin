@@ -140,7 +140,7 @@ async function test(name, fn) {
     await test('未登记 action 在 native 分支明确报错，不影响已迁移 action', async () => {
         const db = seed(makeDb())
         routing.clearCache()
-        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'bindPersonnelAccounts', mode: 'native' })
+        const result = await dispatch({ data: {}, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'prepareScheduleImport', mode: 'native' })
         assert.equal(result.code, 500)
         assert.match(result.message, /未登记/)
     })
@@ -158,8 +158,8 @@ async function test(name, fn) {
         assert.equal(result.errCode, 503)
     })
 
-    await test('可切换写常量：P3-B1/B2/B3 共 11 个 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
-        assert.deepEqual([...routing.SWITCHABLE_WRITE_ACTIONS].sort(), ['createJob', 'handoverCommand', 'jobCommand', 'resolveAttendanceConflict', 'resolveException', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance'])
+    await test('可切换写常量：P3-B1/B2/B3/B4 共 14 个 action；FUNCTIONS 已登记 P2-5/6 业务函数名', () => {
+        assert.deepEqual([...routing.SWITCHABLE_WRITE_ACTIONS].sort(), ['bindPersonnelAccounts', 'createJob', 'handoverCommand', 'jobCommand', 'requestPersonnelClaim', 'resolveAttendanceConflict', 'resolveException', 'reviewPersonnelClaim', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance'])
         assert.equal(FUNCTIONS.operations, 'production-operations')
         assert.equal(FUNCTIONS.orders, 'production-orders')
         assert.equal(FUNCTIONS.ocr, 'doc-ocr')
@@ -196,7 +196,7 @@ async function test(name, fn) {
     await test('非白名单写 action：仍返回 403「P0 适配层只开放只读操作」', async () => {
         const db = seed(makeDb())
         routing.clearCache()
-        const result = await dispatch({ data: { period: '2026-06' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'bindPersonnelAccounts', readOnly: true, forward })
+        const result = await dispatch({ data: { period: '2026-06' }, uniIdToken: 'good', util: { db, uniID: makeUniID() } }, { action: 'prepareScheduleImport', readOnly: true, forward })
         assert.equal(result.code, 403)
         assert.match(result.msg || result.message, /P0 适配层只开放只读操作/)
     })
@@ -274,7 +274,7 @@ async function test(name, fn) {
         const util = { db: seed(makeDb()), uniID: makeUniID() }
         const missing = await operationEntry.main({ data: {}, uniIdToken: 'good', util })
         assert.equal(missing.code, 400)
-        const forbidden = await operationEntry.main({ data: { action: 'bindPersonnelAccounts' }, uniIdToken: 'good', util })
+        const forbidden = await operationEntry.main({ data: { action: 'prepareScheduleImport' }, uniIdToken: 'good', util })
         assert.equal(forbidden.code, 403)
         assert.match(forbidden.msg || forbidden.message, /只开放只读操作/)
         const unauthenticated = await operationEntry.main({ data: { action: 'jobCommand', id: 'job:1' }, util })

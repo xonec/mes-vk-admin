@@ -3,6 +3,7 @@
  * MES 原生化（P3-B）统一分发：
  * 1. 读灰度开关，决定本次请求走 native（内迁实现）还是 forward（旧 façade）。
  * 2. native：checkAuth（含用户表复核）→ scope.profile → handler(db, profile, input) → {code:0,message:'ok',data}。
+ *    auth-only action（认领申请/查询）在 checkAuth 后直接 handler(db, auth, input)，不要求已绑定人员档案。
  * 3. 响应与旧云函数完全一致，前端零改动；错误码 / 文案沿用 ClientError。
  *
  * 注意：本文件只做装配，不写业务逻辑；业务在 util/mes/<模块>.js。
@@ -13,6 +14,12 @@ const { handlers } = require('./handlers')
 const routing = require('./routing')
 
 const RESERVED = ['$url', 'uniIdToken', 'uni_id_token', 'vk', 'context', 'action']
+
+/**
+ * P3-B4：auth-only action（与旧 mes-operations 的 UNBOUND_ACTIONS 对齐）：
+ * 未绑定人员档案的账号也必须能申请/查询认领，因此不经过 scope.profile。
+ */
+const AUTH_ONLY_ACTIONS = ['claimCandidates', 'requestPersonnelClaim', 'myPersonnelClaim']
 
 /** vk router 参数可能在 event.data，也可能平铺在 event 上，两种都兼容。 */
 function payloadOf(event) {
@@ -73,10 +80,12 @@ async function dispatch(event, options = {}) {
     try {
         const auth = await checkAuth(db, event.uniIdToken, uniID)
         if (auth.errCode) return fail(auth.errCode, auth.message)
-        const profile = await scope.profile(db, auth)
         const handler = handlers[action]
         if (typeof handler !== 'function') return fail(500, 'MES 原生化未登记操作：' + action)
-        return ok(await handler(db, profile, payloadOf(event)))
+        const payload = payloadOf(event)
+        if (AUTH_ONLY_ACTIONS.includes(action)) return ok(await handler(db, auth, payload))
+        const profile = await scope.profile(db, auth)
+        return ok(await handler(db, profile, payload))
     } catch (error) {
         if (error instanceof ClientError) return fail(error.code, error.message)
         console.error('[mes-native]', action, error && (error.stack || error.message))
@@ -84,4 +93,4 @@ async function dispatch(event, options = {}) {
     }
 }
 
-module.exports = { dispatch, payloadOf }
+module.exports = { dispatch, payloadOf, AUTH_ONLY_ACTIONS }

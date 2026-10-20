@@ -42,6 +42,10 @@ const READ_ACTIONS = [
   'report',
   'trace',
   'audit',
+  // P3-B4：人员认领（claimCandidates/myPersonnelClaim 为 auth-only 读；listPersonnelClaims 管理员）
+  'claimCandidates',
+  'myPersonnelClaim',
+  'listPersonnelClaims',
 ];
 
 /**
