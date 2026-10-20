@@ -10,6 +10,7 @@ function createMemoryDb() {
     })
     const command = { gte: value => bound('gte', value), lte: value => bound('lte', value) }
     for (const op of ['lt', 'neq', 'exists', 'inc']) command[op] = value => ({ op, value })
+    command.set = value => ({ op: 'set', value })
     command.aggregate = { sum: value => ({ $sum: value }) }
     command.in = value => ({ op: 'in', value })
     command.nin = value => ({ op: 'nin', value })
@@ -30,7 +31,7 @@ function createMemoryDb() {
             if (value && value.op === 'lt') return readPath(doc, key) < value.value
             if (value && value.op === 'lte') return readPath(doc, key) <= value.value
             if (value && value.op === 'gte') return readPath(doc, key) >= value.value
-            if (value && value.op === 'neq') return readPath(doc, key) !== value.value
+            if (value && value.op === 'neq') { const target = readPath(doc, key); if (value.value === null) return target !== undefined && target !== null; return target !== value.value }
             if (value && value.op === 'exists') return (readPath(doc, key) !== undefined) === value.value
             if (value && value.op === 'range') return readPath(doc, key) >= value.min && readPath(doc, key) <= value.max
             if (value && value.op === 'in') { const target = readPath(doc, key); const list = value.value || []; return Array.isArray(target) ? target.some(item => list.includes(item)) : list.includes(target) }
@@ -39,7 +40,9 @@ function createMemoryDb() {
         })
     }
     const apply = (old, data) => Object.assign({}, old, Object.fromEntries(Object.entries(data).map(([key, value]) => [key,
-        value && value.op === 'inc' ? (Number(old[key]) || 0) + value.value : clone(value)
+        value && value.op === 'inc' ? (Number(old[key]) || 0) + value.value
+            : value && value.op === 'set' ? clone(value.value)
+                : clone(value)
     ])))
     const db = {
         command,

@@ -1,6 +1,6 @@
 /**
  * P3-B1/B2 写模块本地双跑：旧实现（mes-uniapp/common/mes-operations）vs native 实现（router/util/mes）。
- * 覆盖 catalogs/schedules（B1）与 jobs/handovers/exceptions（B2）。
+ * 覆盖 catalogs/schedules（B1）、jobs/handovers/exceptions（B2）、attendance（B3）。
  *
  * 用法：node tools/dualrun-mes-write.cjs
  * - 每个 case 建两份完全相同的内存 DB（fake DB），旧/新各跑一次；
@@ -36,11 +36,13 @@ const nativeCatalogs = require(path.join(ROUTER, 'util/mes/catalogs-write.js'))
 const nativeSchedules = require(path.join(ROUTER, 'util/mes/schedules-write.js'))
 const nativeJobs = require(path.join(ROUTER, 'util/mes/jobs-write.js'))
 const nativeHandovers = require(path.join(ROUTER, 'util/mes/handovers-write.js'))
+const nativeAttendance = require(path.join(ROUTER, 'util/mes/attendance-write.js'))
 const oldScope = require(path.join(UNIAPP, 'common/mes-operations/scope.js'))
 const oldCatalogs = require(path.join(UNIAPP, 'common/mes-operations/catalogs.js'))
 const oldSchedules = require(path.join(UNIAPP, 'common/mes-operations/schedules.js'))
 const oldJobs = require(path.join(UNIAPP, 'common/mes-operations/jobs.js'))
 const oldHandovers = require(path.join(UNIAPP, 'common/mes-operations/handovers.js'))
+const oldAttendance = require(path.join(UNIAPP, 'common/mes-operations/attendance.js'))
 
 // 旧模块可能访问全局 uniCloud；具体 DB 由调用参数决定，这里只兜底。
 global.uniCloud = global.uniCloud || { database: () => ({ command: {}, collection: () => ({}) }) }
@@ -86,6 +88,12 @@ function diff(a, b) {
 }
 
 const WORK = over => ({ date: '2026-10-21', shiftId: IDS.shift, processId: IDS.process, personId: IDS.supPerson, kind: 'work', batchNos: [], ...over })
+/** P3-B3：考勤/排班种子（旧/新两侧一致）。 */
+const ATT = over => ({ personId: IDS.supPerson, personName: '于家园', workshopId: IDS.workshop, workshopName: '301', date: '2026-10-22', kind: 'work', shiftId: IDS.shift, shiftName: '早班（8小时）', processIds: [IDS.process], processNames: ['罐装机'], startTime: '08:00', endTime: '16:00', startDayOffset: 0, endDayOffset: 0, plannedHours: 8, workHours: 8, source: 'manual', sourceShiftId: '', sourceSignature: '', status: 'recorded', edited: true, conflict: null, version: 1, ...over })
+const ATT_WORK = over => ({ date: '2026-10-22', kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3', ...over })
+const seedAtt = (db, id, over) => db.ensure('mes_ops_attendance').set(id, { _id: id, ...ATT(over) })
+const seedScheduleDoc = (db, id, over) => db.ensure('mes_ops_schedules').set(id, { _id: id, personId: IDS.supPerson, personName: '于家园', workshopId: IDS.workshop, workshopName: '301', date: '2026-10-22', kind: 'work', shiftId: IDS.shift, shiftName: '早班（8小时）', processId: IDS.process, processName: '罐装机', startTime: '08:00', endTime: '16:00', startDayOffset: 0, endDayOffset: 0, plannedHours: 8, enabled: true, version: 1, ...over })
+
 const REST = over => ({ date: '2026-10-21', kind: 'rest', personId: IDS.otherPerson, absenceType: 'rest', ...over })
 
 const CASES = [
@@ -124,6 +132,22 @@ const CASES = [
     { name: 'exception 描述必填 400', run: async (db, impl) => run(impl.saveException, db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-exception-0002', record: { jobId: IDS.job, category: '设备', description: '' } }) },
     { name: 'exception resolve（主管/处置结果）', run: async (db, impl) => { const created = await impl.saveException(db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-exception-0003', record: { jobId: IDS.job, category: '设备', description: '异响' } }); return run(impl.resolveException, db, (await impl.sup(db)), { id: created._id, expectedVersion: 1, resolution: '更换轴承，已恢复' }) } },
     { name: 'exception resolve 非主管 403', run: async (db, impl) => { const created = await impl.saveException(db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-exception-0004', record: { jobId: IDS.job, category: '设备', description: '异响' } }); return run(impl.resolveException, db, (await impl.operator(db)), { id: created._id, expectedVersion: 1, resolution: '已处理' }) } },
+    // ---- P3-B3：考勤写 ----
+    { name: 'attendance 本人新建出勤（manual/edited/审计）', run: async (db, impl) => run(impl.saveAttendance, db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-att-0001', record: ATT_WORK() }) },
+    { name: 'attendance 本人新建休息 leave', run: async (db, impl) => run(impl.saveAttendance, db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-att-0002', record: { date: '2026-10-23', kind: 'rest', absenceType: 'leave', note: 'TEST-P3B3 请假' } }) },
+    { name: 'attendance 更新本人记录（版本+1）', setup: db => seedAtt(db, 'attendance:manual:self1'), run: async (db, impl) => run(impl.saveAttendance, db, (await impl.sup(db)), { expectedVersion: 1, requestId: 'dualrun-att-0003', record: { _id: 'attendance:manual:self1', date: '2026-10-22', kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3 更新' } }) },
+    { name: 'attendance 时间重叠 409', setup: db => seedAtt(db, 'attendance:manual:overlap'), run: async (db, impl) => run(impl.saveAttendance, db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-att-0004', record: ATT_WORK() }) },
+    { name: 'attendance 冲突记录 409', setup: db => seedAtt(db, 'attendance:manual:conflict', { conflict: { retained: { kind: 'work' }, incoming: { kind: 'work' }, detectedAt: 1, previousVersion: 1 } }), run: async (db, impl) => run(impl.saveAttendance, db, (await impl.sup(db)), { expectedVersion: 1, requestId: 'dualrun-att-0005', record: { _id: 'attendance:manual:conflict', ...ATT_WORK() } }) },
+    { name: 'attendance 管理员代建他人', run: async (db, impl) => run(impl.saveAttendance, db, (await impl.admin(db)), { expectedVersion: 0, requestId: 'dualrun-att-0006', record: ATT_WORK({ personId: IDS.operatorPerson }) }) },
+    { name: 'attendance 管理员改他人无原因 400', setup: db => seedAtt(db, 'attendance:manual:admin1'), run: async (db, impl) => run(impl.saveAttendance, db, (await impl.admin(db)), { expectedVersion: 1, requestId: 'dualrun-att-0007', record: { _id: 'attendance:manual:admin1', ...ATT_WORK() } }) },
+    { name: 'attendance 非管理员编辑他人 403', setup: db => seedAtt(db, 'attendance:manual:other1'), run: async (db, impl) => run(impl.saveAttendance, db, (await impl.operator(db)), { expectedVersion: 1, requestId: 'dualrun-att-0008', record: { _id: 'attendance:manual:other1', ...ATT_WORK() } }) },
+    { name: 'attendance resolve 本人 retained', setup: db => seedAtt(db, 'attendance:conflict:1', { conflict: { retained: { kind: 'work', date: '2026-10-22', shiftId: IDS.shift, processIds: [IDS.process], startTime: '08:00', endTime: '16:00', startDayOffset: 0, endDayOffset: 0, note: '原修改' }, incoming: { kind: 'work', date: '2026-10-22', shiftId: IDS.shiftNight }, detectedAt: 1, previousVersion: 1 } }), run: async (db, impl) => run(impl.resolveAttendanceConflict, db, (await impl.sup(db)), { id: 'attendance:conflict:1', expectedVersion: 1, requestId: 'dualrun-att-0009', choice: 'retained' }) },
+    { name: 'attendance resolve 本人 schedule', setup: db => seedAtt(db, 'attendance:conflict:2', { conflict: { retained: ATT({ note: '原修改' }), incoming: { kind: 'work', date: '2026-10-22', shiftId: IDS.shiftNight, shiftName: '夜班（8小时）', startTime: '22:00', endTime: '06:00', startDayOffset: 0, endDayOffset: 1, processNames: ['罐装机'], workHours: 8 }, detectedAt: 1, previousVersion: 1 } }), run: async (db, impl) => run(impl.resolveAttendanceConflict, db, (await impl.sup(db)), { id: 'attendance:conflict:2', expectedVersion: 1, requestId: 'dualrun-att-0010', choice: 'schedule' }) },
+    { name: 'attendance resolve 无冲突 409', setup: db => seedAtt(db, 'attendance:conflict:3'), run: async (db, impl) => run(impl.resolveAttendanceConflict, db, (await impl.sup(db)), { id: 'attendance:conflict:3', expectedVersion: 1, requestId: 'dualrun-att-0011', choice: 'schedule' }) },
+    { name: 'attendance sync 按月 personId 收窄', setup: db => { seedScheduleDoc(db, 'schedule:sync:1'); seedScheduleDoc(db, 'schedule:sync:2', { personId: IDS.operatorPerson, personName: '操作员' }) }, run: async (db, impl) => run(impl.syncAttendance, db, (await impl.admin(db)), { periodType: 'month', period: '2026-10', personId: IDS.supPerson }) },
+    { name: 'attendance sync 分页（22 组 → 20+2）', setup: db => { for (let day = 1; day <= 22; day++) seedScheduleDoc(db, 'schedule:sync:page:' + day, { date: '2026-10-' + String(day).padStart(2, '0') }) }, run: async (db, impl) => { const first = await impl.syncAttendance(db, (await impl.admin(db)), { periodType: 'month', period: '2026-10', personId: IDS.supPerson }); const second = await impl.syncAttendance(db, (await impl.admin(db)), { periodType: 'month', period: '2026-10', personId: IDS.supPerson, cursor: first.nextCursor }); return { first, second } } },
+    { name: 'attendance sync 非管理员 403', run: async (db, impl) => run(impl.syncAttendance, db, (await impl.sup(db)), { periodType: 'month', period: '2026-10' }) },
+    { name: '冲突链路：manual→saveSchedule 早班→员工改考勤→改夜班→resolve retained', run: async (db, impl) => { const manual = await impl.saveAttendance(db, (await impl.sup(db)), { expectedVersion: 0, requestId: 'dualrun-att-chain-0001', record: ATT_WORK() }); const schedule = await impl.schedule(db, (await impl.admin(db)), { expectedVersion: 0, record: { date: '2026-10-22', shiftId: IDS.shift, processId: IDS.process, personId: IDS.supPerson, kind: 'work', batchNos: [] } }); const synced = [...db.ensure('mes_ops_attendance').values()].find(row => row.source === 'schedule'); const edited = await impl.saveAttendance(db, (await impl.sup(db)), { expectedVersion: synced.version, requestId: 'dualrun-att-chain-0002', record: { _id: synced._id, date: synced.date, kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3 员工修改' } }); const changed = await impl.schedule(db, (await impl.admin(db)), { expectedVersion: 1, record: { _id: schedule._id, date: '2026-10-22', shiftId: IDS.shiftNight, processId: IDS.process, personId: IDS.supPerson, kind: 'work', batchNos: [], changeReason: 'TEST-P3B3 改班制造冲突' } }); const conflicted = [...db.ensure('mes_ops_attendance').values()].find(row => row.conflict); const resolved = await impl.resolveAttendanceConflict(db, (await impl.sup(db)), { id: conflicted._id, expectedVersion: conflicted.version, requestId: 'dualrun-att-chain-0003', choice: 'retained' }); return { manual: manual.version, schedule: schedule.version, edited: edited.version, changed: changed.version, resolved: resolved.version, conflictAfter: resolved.conflict } } },
 ]
 
 async function runCase(item) {
@@ -133,6 +157,7 @@ async function runCase(item) {
         createJob: oldJobs.createJob, jobCommand: oldJobs.jobCommand,
         saveHandover: oldHandovers.saveHandover, handoverCommand: oldHandovers.handoverCommand,
         saveException: oldHandovers.saveException, resolveException: oldHandovers.resolveException,
+        saveAttendance: oldAttendance.saveAttendance, resolveAttendanceConflict: oldAttendance.resolveAttendanceConflict, syncAttendance: oldAttendance.syncAttendance,
         admin: db => oldScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => oldScope.profile(db, { uid: IDS.sup, role: [] }),
         operator: db => oldScope.profile(db, { uid: IDS.operator, role: [] }),
@@ -143,6 +168,7 @@ async function runCase(item) {
         createJob: nativeJobs.createJob, jobCommand: nativeJobs.jobCommand,
         saveHandover: nativeHandovers.saveHandover, handoverCommand: nativeHandovers.handoverCommand,
         saveException: nativeHandovers.saveException, resolveException: nativeHandovers.resolveException,
+        saveAttendance: nativeAttendance.saveAttendance, resolveAttendanceConflict: nativeAttendance.resolveAttendanceConflict, syncAttendance: nativeAttendance.syncAttendance,
         admin: db => nativeScope.profile(db, { uid: IDS.admin, role: ['admin'] }),
         sup: db => nativeScope.profile(db, { uid: IDS.sup, role: [] }),
         operator: db => nativeScope.profile(db, { uid: IDS.operator, role: [] }),

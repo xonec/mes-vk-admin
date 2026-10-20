@@ -45,15 +45,10 @@ const READ_ACTIONS = [
 ];
 
 /**
- * 可切换写 action（P3-B1/B2）：跟随 mes-native-switch，回退时需要允许 forward。
- * 原 P2 批 3-4 的「固定 forward 写」白名单（jobCommand/saveHandover/handoverCommand/saveException）
- * 已在 P3-B2 全部并入本清单，不再有永远 forward 的写 action。
+ * 可切换写 action（P3-B1/B2/B3）：跟随 mes-native-switch，回退时需要允许 forward。
+ * 清单唯一来源是 routing.SWITCHABLE_WRITE_ACTIONS，这里只做转发，避免两份名单漂移。
  */
-const SWITCHABLE_WRITE_ACTIONS = [
-  'saveCatalog', 'saveSchedule',
-  'createJob', 'jobCommand',
-  'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
-];
+const { SWITCHABLE_WRITE_ACTIONS } = require('./mes/routing');
 
 /**
  * 关于长耗时 action（重要）：

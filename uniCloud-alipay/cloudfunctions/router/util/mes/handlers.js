@@ -12,6 +12,7 @@ const { saveCatalog } = require('./catalogs-write')
 const { saveSchedule } = require('./schedules-write')
 const { createJob, jobCommand } = require('./jobs-write')
 const { saveHandover, handoverCommand, saveException, resolveException } = require('./handovers-write')
+const { saveAttendance, resolveAttendanceConflict, syncAttendance } = require('./attendance-write')
 
 const handlers = {
     // 第 1 模块：scope/profile + bootstrap
@@ -46,6 +47,10 @@ const handlers = {
     handoverCommand: (db, profile, input) => handoverCommand(db, profile, input),
     saveException: (db, profile, input) => saveException(db, profile, input),
     resolveException: (db, profile, input) => resolveException(db, profile, input),
+    // P3-B3：考勤写（可切换写，跟随 mes-native-switch）
+    saveAttendance: (db, profile, input) => saveAttendance(db, profile, input),
+    resolveAttendanceConflict: (db, profile, input) => resolveAttendanceConflict(db, profile, input),
+    syncAttendance: (db, profile, input) => syncAttendance(db, profile, input),
 }
 
 module.exports = { handlers }

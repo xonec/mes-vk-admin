@@ -37,12 +37,14 @@ const DEFAULT_ACTIONS = {
  * 可切换写 action：跟随 mes-native-switch（先 forward、后 native、可回退）。
  * - P3-B1：catalogs / schedules（saveCatalog/saveSchedule）
  * - P3-B2：jobs / handovers / exceptions（createJob/jobCommand/saveHandover/handoverCommand/saveException/resolveException）
+ * - P3-B3：attendance（saveAttendance/resolveAttendanceConflict/syncAttendance）
  * 这也是 mes-switch 允许写入的 key 白名单（native-switch.js 直接校验本数组）。
  */
 const SWITCHABLE_WRITE_ACTIONS = [
     'saveCatalog', 'saveSchedule',
     'createJob', 'jobCommand',
     'saveHandover', 'handoverCommand', 'saveException', 'resolveException',
+    'saveAttendance', 'resolveAttendanceConflict', 'syncAttendance',
 ]
 
 let cache = { at: 0, actions: null }

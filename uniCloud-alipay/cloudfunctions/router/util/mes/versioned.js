@@ -15,6 +15,25 @@ function updatedCount(result) {
     throw new Error('数据库未返回更新计数')
 }
 
+/**
+ * 更新载荷归一：顶层字段值为对象/数组时用 `db.command.set(...)` 整体赋值。
+ * 原因：支付宝云 SDK 会把嵌套对象展开成点路径（`$set {"conflict.detectedAt": ...}`），
+ * 目标字段历史值为 `null` 时 Mongo 报 100104「Cannot create field in element {conflict: null}」；
+ * 整体赋值可覆盖 null→对象/数组、旧数组、嵌套对象等全部场景。
+ * `db.command.set` 不存在时回退原写法（兼容其它环境/测试驱动）。
+ * 标量与 null 保持原样（null→对象由对象侧的 set 处理；对象→null 仍是标量赋值，安全）。
+ */
+function literalUpdate(db, data) {
+    const set = db && db.command && db.command.set
+    if (typeof set !== 'function') return data
+    const out = {}
+    for (const key of Object.keys(data)) {
+        const value = data[key]
+        out[key] = value && typeof value === 'object' ? set(value) : value
+    }
+    return out
+}
+
 /** 以稳定键序比较业务内容，忽略服务端版本和审计字段。 */
 function stableKey(value) {
     if (Array.isArray(value)) return '[' + value.map(stableKey).join(',') + ']'
@@ -68,7 +87,7 @@ async function saveVersioned(db, options) {
         })
         if (stableKey(archived.snapshot) !== stableKey(old)) throw new ClientError('历史版本与当前记录不一致，请重新加载后核对', 409)
         const where = { _id: id, version: old.version === undefined ? db.command.exists(false) : old.version }
-        if (updatedCount(await db.collection(collection).where(where).update(data))) return { _id: id, version, unchanged: false, record: { ...data, _id: id } }
+        if (updatedCount(await db.collection(collection).where(where).update(literalUpdate(db, data)))) return { _id: id, version, unchanged: false, record: { ...data, _id: id } }
         if (expectedVersion !== undefined) throw new ClientError('数据已被修改，请重新加载并核对后保存', 409)
     }
     throw new ClientError('并发保存冲突，请稍后重试', 409)
@@ -80,4 +99,4 @@ function changes(before, after, stableKeyFn) {
         .map(field => ({ field, before: before && before[field] !== undefined ? before[field] : null, after: after[field] === undefined ? null : after[field] }))
 }
 
-module.exports = { updatedCount, stableKey, duplicate, addImmutable, saveVersioned, changes }
+module.exports = { updatedCount, stableKey, duplicate, addImmutable, saveVersioned, changes, literalUpdate }

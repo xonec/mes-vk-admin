@@ -8,7 +8,7 @@ const routing = require('../uniCloud-alipay/cloudfunctions/router/util/mes/routi
 const forwardModule = require('../uniCloud-alipay/cloudfunctions/router/util/mes-forward.js')
 
 const { SWITCHABLE_WRITE_ACTIONS, READ_ACTIONS } = { SWITCHABLE_WRITE_ACTIONS: routing.SWITCHABLE_WRITE_ACTIONS, READ_ACTIONS: forwardModule.READ_ACTIONS }
-const EXPECTED = ['createJob', 'handoverCommand', 'jobCommand', 'resolveException', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule']
+const EXPECTED = ['createJob', 'handoverCommand', 'jobCommand', 'resolveAttendanceConflict', 'resolveException', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance']
 
 function makeUniID(uid) {
     return { checkToken: async (token) => (token === 'tok-' + uid ? { code: 0, uid } : { code: 30204 }) }
@@ -40,7 +40,7 @@ async function test(name, fn) {
 }
 
 ;(async () => {
-    console.log('\nP3 可切换写灰度（P3-B1/B2 共 8 项）')
+    console.log('\nP3 可切换写灰度（P3-B1/B2/B3 共 11 项）')
 
     await test('常量：8 个可切换写 action，且不再导出固定 WRITE_ACTIONS、与只读白名单不重叠', () => {
         assert.deepEqual([...SWITCHABLE_WRITE_ACTIONS].sort(), EXPECTED)
@@ -102,6 +102,20 @@ async function test(name, fn) {
         assert.equal(db.ensure('mes_ops_jobs').get(IDS.job).state, 'running')
     })
 
+    await test('开关=native：saveAttendance 走原生 handler 并写库', async () => {
+        const { db } = createWriteDb()
+        await seedUser(db, IDS.sup, [])
+        const { calls, forward } = captureForward({ code: 0, message: 'ok' })
+        routing.clearCache()
+        db.ensure('vk-global-data').set(routing.CONFIG_ID, { _id: routing.CONFIG_ID, actions: { saveAttendance: 'native' } })
+        const result = await dispatch({ data: { expectedVersion: 0, requestId: 'test-b3-attendance-0001', record: { date: '2026-10-22', kind: 'work', shiftId: IDS.shift, processIds: [IDS.process], note: 'TEST-P3B3' } }, uniIdToken: 'tok-' + IDS.sup, util: { db, uniID: makeUniID(IDS.sup) } }, { action: 'saveAttendance', forward })
+        assert.equal(calls.length, 0, 'native 不应调用 forward')
+        assert.equal(result.code, 0)
+        assert.equal(result.data.version, 1)
+        assert.equal(result.data.source, 'manual')
+        assert.equal(db.ensure('mes_ops_attendance').size, 1)
+    })
+
     await test('开关=forward：jobCommand/saveHandover 走 forward（readOnly=false）且不写库', async () => {
         const db = createMemoryDb()
         await seedUser(db, IDS.sup, [])
@@ -119,7 +133,7 @@ async function test(name, fn) {
         assert.equal(db.ensure('mes_ops_handovers').size, 0)
     })
 
-    await test('8 个可切换写 action 缺 token 全部 401，且不 forward/不 native', async () => {
+    await test('11 个可切换写 action 缺 token 全部 401，且不 forward/不 native', async () => {
         const db = createMemoryDb()
         const { calls, forward } = captureForward({ code: 0 })
         routing.clearCache()

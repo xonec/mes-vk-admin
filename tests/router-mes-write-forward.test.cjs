@@ -80,8 +80,8 @@ async function test(name, fn) {
 ;(async () => {
     console.log('\n写操作 forward 通道（action 级）测试')
 
-    await test('可切换写清单与只读白名单不重叠（P3-B1/B2 共 8 个）', () => {
-        assert.deepEqual([...SWITCHABLE_WRITE_ACTIONS].sort(), ['createJob', 'handoverCommand', 'jobCommand', 'resolveException', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule'])
+    await test('可切换写清单与只读白名单不重叠（P3-B1/B2/B3 共 11 个）', () => {
+        assert.deepEqual([...SWITCHABLE_WRITE_ACTIONS].sort(), ['createJob', 'handoverCommand', 'jobCommand', 'resolveAttendanceConflict', 'resolveException', 'saveAttendance', 'saveCatalog', 'saveException', 'saveHandover', 'saveSchedule', 'syncAttendance'])
         const overlap = SWITCHABLE_WRITE_ACTIONS.filter((action) => READ_ACTIONS.includes(action))
         assert.deepEqual(overlap, [])
     })
